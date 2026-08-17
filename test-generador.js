@@ -12,9 +12,7 @@ ck('sube y despues baja', (() => {
   const iMin = t.findIndex(p => p.y === minY);
   return iMin > 0 && iMin < t.length - 1;
 })());
-// Tolerancia 15 (no 1): con vy≈4 px/paso al momento de cruzar el suelo,
-// el último paso pisa varios píxeles de más — eso es físico, no un bug.
-ck('termina en el suelo o antes', t[t.length - 1].y <= M.F.GY + 15, t[t.length - 1].y);
+ck('termina en el suelo o antes', t[t.length - 1].y <= M.F.GY + 1, t[t.length - 1].y);
 ck('no atraviesa el techo', t.every(p => p.y >= M.F.TECHO - 1));
 ck('metros() cuenta desde el tee',
   M.metros(M.F.TEE + 3 * M.F.PXM) === 3, M.metros(M.F.TEE + 3 * M.F.PXM));

@@ -47,7 +47,7 @@
     for (let i = 1; i <= pasos; i++) {
       e = paso(e);
       out.push({ x: e.x, y: e.y, vx: e.vx, vy: e.vy, paso: i });
-      if (e.y >= F.GY) break;
+      if (e.y >= F.GY) { out[out.length - 1].y = F.GY; break; }
     }
     return out;
   }
