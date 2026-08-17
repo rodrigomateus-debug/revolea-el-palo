@@ -924,6 +924,20 @@ git commit -m "Cámara alejada, arco predicho y anillo de timing"
 
 ### Task 7: Bot de destreza y las aserciones de diseño
 
+**Dos cosas que salieron de la revisión de la Task 5 y afectan la calibración:**
+
+1. **`IMPULSO` de 7.4 se pasa mucho del techo.** Saliendo de una cima en `y≈190`
+   con el techo en `y=50`, todo rebote perfecto clava el techo y descarta el
+   excedente, así que los arcos salen casi idénticos eslabón a eslabón. Eso achata
+   el desafío de timing y hace monótono el vuelo. Al calibrar, considerar bajar
+   `IMPULSO` hasta que el arco perfecto quede por debajo del techo y la altura sea
+   una consecuencia del acierto y no un valor fijo.
+2. **Si señal/ruido falla, el primer sospechoso NO son las ventanas.** Hasta que la
+   Task 8 saque el bucle de colisión, los obstáculos que no son el objetivo siguen
+   siendo paredes que parten el combo al azar — o sea la fuente de ruido que este
+   rediseño viene a eliminar, todavía activa. Reportar y parar antes de tocar
+   ventanas o impulso para compensarla.
+
 El test que contesta «¿esto premia destreza?» con números en vez de opinión.
 
 **Files:**
@@ -1058,6 +1072,25 @@ git commit -m "Bot de destreza: monotonía, señal/ruido y ausencia de techo"
 ---
 
 ### Task 8: Limpieza, migración a v5 y recalibración de leyendas
+
+**Cuatro items que agregó la revisión de la Task 5** y que hay que borrar acá:
+
+1. **Los obstáculos que no son el objetivo siguen siendo paredes.** Chocarlos hace
+   `c.vx*=.22` y llama a `bail()`, que parte el combo de trucos. Eso es exactamente
+   la destrucción de combo por azar que este rediseño viene a sacar: el mismo árbol
+   es trampolín o pared según cuál eligió `alcanzables[0]`. Sacar el bucle de
+   colisión del vuelo por completo — la única interacción con un obstáculo es el
+   rebote. Con eso `bail()` y el `hit()` del vuelo quedan sin usar: borrarlos.
+2. **`o.hit=true` en un rebote** hace que un trampolín en el que caíste se dibuje
+   con la paleta de «golpeado». Si el bucle de colisión se va, revisar que `o.hit`
+   siga significando algo o borrarlo también.
+3. **La tarjeta de onboarding miente.** Dice «clavarla en el green multiplica todo»,
+   que es falso desde que el green quedó cosmético, y no menciona tocar para
+   rebotar, que es la mecánica central. Reescribir los tres pasos numerados en el
+   `.dc.html` y en el template de `build-app.js`.
+4. **Hay dos combos distintos en pantalla a la vez:** `rMult` muestra el multiplicador
+   de trucos (`×1.4`) y `rHint` el de rebotes (`Combo ×13`). Dejar uno solo, el de
+   rebotes, que es el que entra en el puntaje.
 
 Sacar todo lo que el diseño nuevo dejó sin sentido, y poner el ranking en la escala
 nueva. Es la task con más borrado que escritura.
