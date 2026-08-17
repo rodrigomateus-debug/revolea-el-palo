@@ -27,11 +27,21 @@ ck('la cima es el techo del obstáculo', obs.every(o => o.cima === M.F.GY - o.h)
 ck('el lcg es determinista',
   JSON.stringify(M.generar(M.lcg(12345), 400, 6000)) === JSON.stringify(obs));
 
+// Las dos fuerzas de rebote se le PREGUNTAN al resolutor en vez de escribirlas a
+// mano. Estaban clavadas en -7.4 y -4.6 y la calibración de la Task 7 movió el
+// impulso a 3.6 y el factor del bueno a 0.78: los tests de solvencia y de
+// legibilidad hubieran seguido midiendo dos arcos que el juego ya no produce, y el
+// presupuesto de legibilidad —que es justo lo que la baja de impulso pone en
+// riesgo— se hubiera medido con el arco viejo, largo, que siempre pasa.
+const EST0 = { x: 300, y: M.F.GY - 60, vx: 9, vy: 3 };
+const VY_PERFECTO = M.resolverRebote(EST0, 0).vy;
+const VY_BUENO = M.resolverRebote(EST0, (M.F.VENTANA_PERFECTO + M.F.VENTANA_BUENO) / 2).vy;
+
 // --- invariante de solvencia: desde un rebote que recuperó altura siempre hay
 // un próximo objetivo alcanzable. Se prueba con las dos fuerzas de rebote que
-// va a producir el resolutor de rebotes: -7.4 (perfecto) y -4.6 (bueno). Un
-// rebote débil sigue siendo un rebote exitoso, no un error del jugador.
-for (const vyRebote of [-7.4, -4.6]) {
+// produce el resolutor: el perfecto y el bueno. Un rebote débil sigue siendo un
+// rebote exitoso, no un error del jugador.
+for (const vyRebote of [VY_PERFECTO, VY_BUENO]) {
   let sinSalida = 0, probados = 0;
   for (let s = 1; s <= 300; s++) {
     const r = M.lcg(s);
@@ -87,19 +97,25 @@ ck('el caso sin salida se ejercita de verdad', sinSalidaRaspon > 0 && yaAlcanzab
 // que es la misma forma de agujero que dejaba 4,5% de objetivos afuera en la Task 3.
 const ADEL_PEOR = M.adelante(M.F.ZOOM_VUELO, M.F.VX_MAX);
 const ADEL_QUIETO = M.adelante(M.F.ZOOM_VUELO, 0);
+// Se mide con las DOS fuerzas de rebote y se guarda la peor: el rebote bueno hace
+// arcos más cortos que el perfecto, así que avisa menos, y medir sólo el perfecto
+// deja afuera justo el caso ajustado. Medido: con el impulso en 3.6, el perfecto
+// avisa 939 ms y el bueno 848 ms.
 let cortos = 0, medidos = 0, minAviso = Infinity;
-for (let s = 1; s <= 200; s++) {
-  const r = M.lcg(s * 7);
-  const esc = M.generar(r, 400, 20000);
-  let est = { x: 300, y: M.F.GY - 60, vx: 9, vy: -7 };
-  for (let reb = 0; reb < 10; reb++) {
-    M.rellenar(esc, r, est);
-    const alc = M.alcanzables(esc, est);
-    if (!alc.length) break;
-    const o = alc[0], ms = M.avisoMs(est, o, ADEL_PEOR);
-    medidos++; minAviso = Math.min(minAviso, ms);
-    if (ms < M.F.AVISO_MIN_MS) cortos++;
-    est = { x: o.x + o.w / 2, y: o.cima, vx: Math.min(M.F.VX_MAX, 9), vy: -7 };
+for (const vyRebote of [VY_PERFECTO, VY_BUENO]) {
+  for (let s = 1; s <= 200; s++) {
+    const r = M.lcg(s * 7);
+    const esc = M.generar(r, 400, 20000);
+    let est = { x: 300, y: M.F.GY - 60, vx: 9, vy: vyRebote };
+    for (let reb = 0; reb < 10; reb++) {
+      M.rellenar(esc, r, est);
+      const alc = M.alcanzables(esc, est);
+      if (!alc.length) break;
+      const o = alc[0], ms = M.avisoMs(est, o, ADEL_PEOR);
+      medidos++; minAviso = Math.min(minAviso, ms);
+      if (ms < M.F.AVISO_MIN_MS) cortos++;
+      est = { x: o.x + o.w / 2, y: o.cima, vx: Math.min(M.F.VX_MAX, 9), vy: vyRebote };
+    }
   }
 }
 ck('ningún objetivo avisa con menos de AVISO_MIN_MS', cortos === 0,
@@ -110,7 +126,7 @@ ck('ningún objetivo avisa con menos de AVISO_MIN_MS', cortos === 0,
 // barrido de 300 semillas que la invariante de solvencia para que aparezcan de
 // verdad los saltos de un solo paso que atraviesan un obstáculo angosto.
 let infinitosEnAlcanzable = 0, chequeadosAlcanzable = 0;
-for (const vyRebote of [-7.4, -4.6]) {
+for (const vyRebote of [VY_PERFECTO, VY_BUENO]) {
   for (let s = 1; s <= 300; s++) {
     const r = M.lcg(s);
     const esc = M.generar(r, 400, 20000);

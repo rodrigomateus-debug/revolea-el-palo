@@ -93,5 +93,142 @@ ck('no quedó ningún cruce de cima escrito a mano',
   !/[<>]=?\s*[\w.[\]]*\.cima|\.cima\s*[<>]/.test(codigo),
   'hay una comparación contra .cima fuera de Motor.cruzaCima');
 
-console.log(fail.length ? 'FALLAS:\n- ' + fail.join('\n- ') : 'TODO OK — rebote, combo, puntaje y variedad');
+// --- bot: la destreza tiene que dominar al azar ---
+// Se copia el arnés de test-motor.js: stubea DOM, canvas y audio para poder
+// instanciar el Component sin navegador.
+function arnes() {
+  let VT = 1000;
+  const el = () => ({ style:{}, offsetWidth:1, width:0, height:0, getContext:()=>ctx(), textContent:'' });
+  const MET = ['fillRect','drawImage','save','restore','translate','rotate','beginPath','arc',
+    'ellipse','moveTo','lineTo','fill','stroke','setLineDash','setTransform','fillText','clearRect'];
+  const ctx = () => { const o = {}; for (const k of MET) o[k] = () => {}; return o; };
+  global.performance = { now: () => VT };
+  global.document = { hidden:false, createElement:()=>el(), addEventListener(){}, removeEventListener(){} };
+  global.requestAnimationFrame = ()=>1; global.cancelAnimationFrame = ()=>{};
+  global.setInterval = ()=>2; global.clearInterval = ()=>{};
+  global.localStorage = { getItem:()=>null, setItem(){} };
+  global.Image = class { set src(v){ this.complete=true; this.naturalWidth=26; this.naturalHeight=13;
+    if (this.onload) this.onload(); } };
+  global.Audio = class { constructor(){this.volume=1;} play(){return Promise.resolve();}
+    pause(){} addEventListener(){} };
+  global.AudioContext = undefined;
+  global.window = { addEventListener(){}, removeEventListener(){} };
+  global.React = { createRef: () => ({ current: el() }) };
+  global.Motor = M;
+  class DCLogic { constructor(){ this.props={}; this.state={}; }
+    setState(u,cb){ Object.assign(this.state, typeof u==='function'?u(this.state):u);
+      if (cb) cb(); if (this.componentDidUpdate) this.componentDidUpdate({}); }
+    componentDidMount(){} componentDidUpdate(){} componentWillUnmount(){} renderVals(){return{};} }
+  global.DCLogic = DCLogic;
+  const C = new Function('DCLogic','React','window','document','performance','Motor',
+    cuerpo + '\nreturn Component;')(DCLogic, React, window, document, performance, M);
+  return { C, adv: ms => { VT += ms; }, now: () => VT };
+}
+
+const TOPE = 40000;   // pasos de lógica: dónde se corta el vuelo del bot
+
+// Un vuelo completo con un bot cuyo error de timing es `errorMs`.
+//
+// El error es JITTER y no un adelanto sistemático, y eso importa: el desfase que
+// mide tocar() está cuantizado a pasos de física, que son STEP/VUELO = 30,3 ms de
+// reloj. Un bot que toca "en cuanto cree que llegó" tiene desfase 0 tanto con 20 ms
+// de error como con 0, o sea que los dos perfiles de arriba de la curva son EL
+// MISMO bot: la aserción de monotonía compararía un bot contra sí mismo y no
+// podría fallar. Sorteando el desfase en [-errorMs, +errorMs] los cuatro perfiles
+// son distintos de verdad, y además se ejercita la mitad TARDÍA de la ventana, que
+// un bot que sólo se adelanta no toca nunca.
+//
+// El sorteo usa su propio LCG y no Math.random: la medición de ruido necesita que
+// el azar del bot y el del escenario sean independientes, y Math.random acá es el
+// del escenario.
+function vuelo(errorMs, semilla, tope) {
+  const { C, adv, now } = arnes();
+  const c = new C();
+  c.props = { tiros: 1, censura: 'Sin filtro', viento: false, sonido: false };
+  c.componentDidMount();
+  c.state.player = { id:'x', name:'bot', emoji:'x', best:0 };
+  let s = semilla; Math.random = () => (s = (s*1103515245+12345) & 0x7fffffff) / 0x7fffffff;
+  c.start();
+  for (let i = 0; i < 8000 && c.g.phase !== 'ready'; i++) { adv(M.F.STEP); c.tick(now()); }
+  c.begin();
+  for (let i = 0; i < 30; i++) { adv(M.F.STEP); c.tick(now()); }
+  c.g.manual = true; c.g.angle = 45; c.g.power = 1;
+  c.fire();
+  const msPaso = M.F.STEP / M.F.VUELO;          // ms de reloj por paso de física
+  const pulso = M.lcg(semilla ^ 0x5bf03635);    // el pulso del bot, aparte del escenario
+  let pasos = 0, objAnt = null, pasoAnt = null, kToque = 0;
+  while (pasos < (tope || TOPE) && (c.g.phase === 'fly' || c.g.phase === 'swing')) {
+    adv(M.F.STEP); c.tick(now()); pasos++;
+    const g = c.g;
+    if (g.phase === 'fly' && g.objetivo && g.pasoObjetivo != null) {
+      // objetivo nuevo ⇒ nuevo sorteo. kToque son los pasos que le faltan al palo
+      // cuando el bot decide tocar: >0 se adelanta, <0 se atrasa.
+      if (g.objetivo !== objAnt || g.pasoObjetivo !== pasoAnt) {
+        objAnt = g.objetivo; pasoAnt = g.pasoObjetivo;
+        kToque = Math.round(-(pulso() * 2 - 1) * errorMs / msPaso);
+      }
+      if (g.pasoObjetivo - (g.pasosVuelo || 0) <= kToque) c.tocar();
+    }
+  }
+  // tick() se come las excepciones del loop en window.__loopErr. Sin esto un vuelo
+  // que explotó a la mitad se mide como un vuelo corto y las cuatro aserciones
+  // pasarían midiendo un juego roto.
+  if (global.window.__loopErr) throw new Error('el loop explotó: ' + global.window.__loopErr);
+  return { pts: c.g.puntos, pasos: pasos, combo: c.g.combo };
+}
+
+const mediana = a => a.slice().sort((x,y)=>x-y)[a.length >> 1];
+const perfiles = [120, 60, 20, 0];   // ms de error: de torpe a perfecto
+const medianas = perfiles.map(e => mediana(
+  Array.from({ length: 25 }, (_, i) => vuelo(e, 1000 + i * 37).pts)));
+
+ck('la destreza es monótona: menos error ⇒ más puntos',
+  medianas.every((v, i) => i === 0 || v >= medianas[i-1]),
+  perfiles.map((e,i)=>e+'ms='+medianas[i]).join('  '));
+
+// El ruido es la varianza del score con la MISMA entrada (error 0, sin jitter) y
+// distinto escenario: es lo que el jugador no controla. La señal es lo que separa
+// al impecable del torpe. El juego viejo medía 1,48 acá.
+const fijo = Array.from({ length: 40 }, (_, i) => vuelo(0, 5000 + i * 91));
+const pts = fijo.map(r => r.pts);
+const med = pts.reduce((a,b)=>a+b,0) / pts.length;
+const ruido = Math.sqrt(pts.reduce((a,b)=>a+(b-med)**2,0) / pts.length);
+const senal = medianas[3] - medianas[0];
+ck('señal/ruido > 3', senal > ruido * 3,
+  'señal ' + Math.round(senal) + ' / ruido ' + Math.round(ruido) +
+  ' = ' + (senal / Math.max(1, ruido)).toFixed(2));
+
+const perfecto = vuelo(0, 777);
+// Los dos pisos se miden en el PEOR de los 41 vuelos impecables y no en uno solo:
+// "no muere nunca" verificado en una semilla es la clase de garantía flojita que ya
+// costó tres rondas de arreglos. Los 40 vuelos del ruido son con error 0, así que
+// ya están medidos y sirven de barrido gratis.
+const impecables = fijo.concat([perfecto]);
+const peorPasos = Math.min(...impecables.map(r => r.pasos));
+const peorPts = Math.min(...impecables.map(r => r.pts));
+ck('el bot perfecto no muere: vuela hasta el corte', peorPasos >= 39000,
+  'el peor de ' + impecables.length + ' vuelos impecables murió a los ' + peorPasos + ' pasos');
+ck('sin techo: el bot perfecto puntúa mucho más que el torpe',
+  peorPts > medianas[0] * 10,
+  'el peor impecable hizo ' + peorPts + ' contra ' + medianas[0] + ' del torpe');
+
+// El juego viejo se clavaba en ~5000 puntos y al intento 205 dejaba de mejorar. Que
+// el impecable puntúe mucho no descarta eso: hace falta ver que el score no se
+// SATURE con el largo del vuelo. Como el bot con error 0 no sortea nada, medio vuelo
+// con la misma semilla es exactamente el prefijo del vuelo entero, así que la
+// segunda mitad es la resta. Tiene que pagar más que la primera, porque el combo
+// sigue creciendo: un tope de score o de combo pasa las cuatro aserciones de arriba
+// y se cae acá.
+const mitad = vuelo(0, 777, TOPE / 2).pts;
+ck('sin plateau: la segunda mitad del vuelo paga más que la primera',
+  perfecto.pts - mitad > mitad,
+  'primera mitad ' + mitad + ', segunda ' + (perfecto.pts - mitad));
+
+console.log('destreza: ' + perfiles.map((e,i)=>e+'ms=' + medianas[i]).join('  ') +
+  '  |  señal/ruido ' + (senal / Math.max(1, ruido)).toFixed(2) +
+  ' (σ ' + Math.round(ruido) + ', ' + Math.min(...pts) + '..' + Math.max(...pts) + ' con entrada idéntica)' +
+  '\n          peor de ' + impecables.length + ' impecables: ' + peorPasos + ' pasos y ' + peorPts +
+  ' pts; combo ×' + perfecto.combo + '; segunda mitad del vuelo ' +
+  ((perfecto.pts - mitad) / Math.max(1, mitad)).toFixed(1) + '× la primera');
+console.log(fail.length ? 'FALLAS:\n- ' + fail.join('\n- ') : 'TODO OK — rebote, combo, puntaje, variedad y destreza');
 process.exit(fail.length ? 1 : 0);

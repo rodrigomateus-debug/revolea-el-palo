@@ -732,6 +732,17 @@ class Component extends DCLogic{
         // dejaba inalcanzable la mitad tardía de la ventana de perfecto, que es
         // simétrica en resolverRebote. El resto de los obstáculos sigue chocando.
         if(o===g.objetivo)continue;
+        // …y tampoco es pared el vecino que SOLAPA la caja del objetivo: en el mismo
+        // x en que el objetivo es plataforma, el vecino estrella el palo (vx*=.22) y
+        // el jugador no tiene forma de evitarlo. Pasa seguido porque Motor.rellenar
+        // planta el objetivo justo donde el arco cruza la cima, sin mirar si ya había
+        // algo ahí — y no puede mirarlo: filtrar los lugares ocupados deja 260 de
+        // 3388 estados sin salida y rompe la invariante de solvencia (medido).
+        // Era la ÚNICA muerte del bot impecable: sin esta línea 17 de 20 vuelos
+        // perfectos mueren antes del corte y el score de entrada idéntica varía
+        // 2250×; con ella los 20 llegan al corte y varía 1,9×. El 4 es el mismo aire
+        // que se da hit() para los bordes.
+        if(g.objetivo&&o.x<g.objetivo.x+g.objetivo.w+4&&g.objetivo.x<o.x+o.w+4)continue;
         if(!o.near&&!this.hit(o,c)&&c.x>o.x-8&&c.x<o.x+o.w+8&&c.y<GY-o.h&&c.y>GY-o.h-20){o.near=true;this.trick('AL RAS',50,.2)}
         if(this.hit(o,c)){
           o.hit=true;

@@ -227,14 +227,26 @@
 
   // Impulso de rebote. El perfecto devuelve la energía entera, así que un jugador
   // impecable no baja nunca: el techo del score es su pulso, no una constante.
-  const IMPULSO = 7.4;
+  // Calibrado con el bot de test-destreza.js. Estaba en 7.4, que se pasa tanto del
+  // techo que TODO arco de la cadena lo clava y descarta el excedente: medido, 165
+  // de 165 arcos de un vuelo impecable con el apex exactamente en F.TECHO, o sea la
+  // altura era una constante y no una consecuencia del acierto. Con 3.6 no lo clava
+  // ninguno (apex 73..103) y el arco vuelve a contar cómo salió el toque.
+  // No se puede bajar mucho más ni dejar el bueno donde estaba: el rebote bueno
+  // acorta el arco y con eso el aviso del próximo objetivo. Con IMPULSO 3.6 y el
+  // factor viejo de 0.62 el bueno dejaba 94 objetivos de 2000 por debajo de
+  // F.AVISO_MIN_MS; con 0.78 el peor aviso es 848 ms (el piso es 800) y da MÁS aire
+  // que los 818 ms de antes. El barrido completo está en el informe de la Task 7:
+  // arriba de 4.0 el arco clava el techo a la velocidad de régimen (vx≈2,2) y abajo
+  // de 3.9 con 0.62 se cae el presupuesto de legibilidad.
+  const IMPULSO = 3.6;
 
   function resolverRebote(est, desfaseMs) {
     const d = Math.abs(desfaseMs);
     if (d <= F.VENTANA_PERFECTO)
       return { tipo: 'perfecto', vy: -IMPULSO, vx: Math.min(F.VX_MAX, est.vx * 1.06 + 0.4) };
     if (d <= F.VENTANA_BUENO)
-      return { tipo: 'bueno', vy: -IMPULSO * 0.62, vx: Math.min(F.VX_MAX, est.vx) };
+      return { tipo: 'bueno', vy: -IMPULSO * 0.78, vx: Math.min(F.VX_MAX, est.vx) };
     // Raspón: pierde 35% de velocidad y no gana altura. No termina el vuelo por sí
     // solo; el palo baja y el jugador todavía puede recuperarse antes del suelo.
     return { tipo: 'raspon', vy: Math.max(0.5, est.vy * 0.5), vx: est.vx * 0.65 };
