@@ -753,7 +753,44 @@ node test-db.js "Revolea el Palo.dc.html"
 
 Esperado: los cuatro en verde.
 
-- [ ] **Step 5: Ajustar el umbral de poda de `test-motor.js`**
+- [ ] **Step 5: Hacer que el vuelo en vivo consuma `Motor.paso()`**
+
+Sin este paso hay **dos implementaciones de la física**: `Motor.paso()` predice con
+`VX_MAX` y sin viento, y el loop en vivo integra inline con `clamp(c.vx,-16,16)` y
+suma viento. El anillo de timing sale de `pasoDeLlegada`, que usa el predictor: si
+discrepan, el anillo apunta al momento equivocado y el juego se vuelve a sentir
+azaroso. Una sola implementación o la mecánica no funciona.
+
+En `step()`, dentro de `if(g.acc>=1){`, reemplazar el bloque de integración
+—desde `const sp=Math.hypot(c.vx,c.vy),drag=...` hasta `c.x+=c.vx;c.y+=c.vy;`
+inclusive, y también el `if(c.y<50){...}` que le sigue— por:
+
+```js
+      // Una sola física: el vuelo en vivo usa el mismo paso que la predicción, así
+      // el anillo de timing no puede apuntar a un momento que no va a pasar.
+      const e=Motor.paso({x:c.x,y:c.y,vx:c.vx,vy:c.vy});
+      c.x=e.x;c.y=e.y;c.vx=e.vx;c.vy=e.vy;
+```
+
+Notar que `Motor.paso()` ya aplica el clamp del techo (`F.TECHO`), así que el
+`if(c.y<50)` desaparece por completo. El `drag` que el código viejo aplicaba sólo
+cuando `!c.grounded` ahora se aplica siempre: es correcto, porque una vez que
+`c.grounded` es `true` el vuelo terminó y este bloque no vuelve a correr.
+
+Agregar a `test-generador.js`, antes del `console.log`, la aserción que vuelve
+verdadero el comentario de `paso()`:
+
+```js
+// --- predicción y realidad no pueden divergir ---
+// El anillo de timing sale del predictor. Si el vuelo en vivo integrara distinto,
+// el anillo apuntaría a un momento que no va a pasar. Se compara paso a paso.
+const cuerpoM = require('fs').readFileSync('Revolea el Palo.dc.html', 'utf8');
+ck('el vuelo en vivo usa Motor.paso', /Motor\.paso\(/.test(cuerpoM));
+ck('no quedó integración inline duplicada',
+  !/c\.vx=clamp\(c\.vx,-16,16\)/.test(cuerpoM) && !/c\.vy\+=G\*0\.44/.test(cuerpoM));
+```
+
+- [ ] **Step 6: Ajustar el umbral de poda de `test-motor.js`**
 
 `test-motor.js` afirma `g.obs acotado (<80)`. Ese umbral asumía el generador viejo,
 que sembraba hasta 4200 px; el nuevo siembra hasta 20000 px de una, así que el pico
@@ -770,7 +807,7 @@ y en el bloque de vuelo largo, cambiar `ck('poda: g.obs acotado en vuelo largo',
 por `withCull.peak < 200`. La aserción que de verdad protege contra la fuga es la
 de al lado, la que compara con la corrida sin poda, y esa no se toca.
 
-- [ ] **Step 6: Actualizar el cartel de ayuda**
+- [ ] **Step 7: Actualizar el cartel de ayuda**
 
 En `Revolea el Palo.dc.html` y en el template de `build-app.js`, el texto del
 `rHint` durante el vuelo dice «¡Tocá la pantalla para que el palo planee!».
@@ -778,7 +815,7 @@ Cambiarlo por `'Tocá justo cuando llegue'`. Buscar también en `launch()` y en 
 bloque de `hudT` de `step()` los textos que mencionan aletazos y reemplazarlos por
 `'Combo ×'+g.combo`.
 
-- [ ] **Step 7: Regenerar, correr todo y commitear**
+- [ ] **Step 8: Regenerar, correr todo y commitear**
 
 ```bash
 node build-app.js .
