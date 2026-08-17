@@ -134,9 +134,28 @@
     return 'planto';
   }
 
+  // Milisegundos entre que el obstáculo entra en el campo visible y el momento en
+  // que el palo llega a su cima. Con la cámara vieja (sin zoom) y VX_MAX 16 esto
+  // daba 160 ms, por debajo del tiempo de reacción humano (~250 ms).
+  function avisoMs(est, o, zoom) {
+    const anchoVisible = F.W * (zoom || 1);
+    const tr = trayectoria(est, 1200);
+    let pasoVisible = null, pasoLlegada = null;
+    for (let i = 0; i < tr.length; i++) {
+      // la cámara deja al palo a un tercio del borde izquierdo
+      const bordeDerecho = tr[i].x - anchoVisible / 3 + anchoVisible;
+      if (pasoVisible === null && o.x <= bordeDerecho) pasoVisible = i;
+      if (i > 0 && tr[i].vy > 0 && tr[i-1].y <= o.cima && tr[i].y >= o.cima
+          && tr[i].x >= o.x && tr[i].x <= o.x + o.w) { pasoLlegada = i; break; }
+    }
+    if (pasoVisible === null || pasoLlegada === null) return Infinity;
+    // cada paso de física equivale a STEP/VUELO ms de reloj
+    return Math.max(0, (pasoLlegada - pasoVisible) * (F.STEP / F.VUELO));
+  }
+
   const api = { F: F, acotar: acotar, metros: metros, paso: paso, trayectoria: trayectoria,
                 TIPOS: TIPOS, lcg: lcg, generar: generar, alcanzables: alcanzables,
-                rellenar: rellenar };
+                rellenar: rellenar, avisoMs: avisoMs };
   if (typeof module !== 'undefined' && module.exports) module.exports = api;
   else raiz.Motor = api;
 })(typeof window !== 'undefined' ? window : globalThis);

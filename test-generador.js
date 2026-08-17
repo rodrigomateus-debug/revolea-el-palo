@@ -80,5 +80,24 @@ for (let s = 1; s <= 300; s++) {
 ck('el caso sin salida se ejercita de verdad', sinSalidaRaspon > 0 && yaAlcanzable > 0,
   'planto=' + planto + ' sin-salida=' + sinSalidaRaspon + ' ya-habia=' + yaAlcanzable);
 
+// --- presupuesto de legibilidad ---
+let cortos = 0, medidos = 0, minAviso = Infinity;
+for (let s = 1; s <= 200; s++) {
+  const r = M.lcg(s * 7);
+  const esc = M.generar(r, 400, 20000);
+  let est = { x: 300, y: M.F.GY - 60, vx: 9, vy: -7 };
+  for (let reb = 0; reb < 10; reb++) {
+    M.rellenar(esc, r, est);
+    const alc = M.alcanzables(esc, est);
+    if (!alc.length) break;
+    const o = alc[0], ms = M.avisoMs(est, o, M.F.ZOOM_VUELO);
+    medidos++; minAviso = Math.min(minAviso, ms);
+    if (ms < M.F.AVISO_MIN_MS) cortos++;
+    est = { x: o.x + o.w / 2, y: o.cima, vx: Math.min(M.F.VX_MAX, 9), vy: -7 };
+  }
+}
+ck('ningún objetivo avisa con menos de AVISO_MIN_MS', cortos === 0,
+  cortos + ' de ' + medidos + ' avisan poco; el mínimo fue ' + Math.round(minAviso) + ' ms');
+
 console.log(fail.length ? 'FALLAS:\n- ' + fail.join('\n- ') : 'TODO OK — generador y trayectoria');
 process.exit(fail.length ? 1 : 0);
