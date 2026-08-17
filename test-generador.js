@@ -145,7 +145,7 @@ ck('no quedó integración inline duplicada',
 // El número del presupuesto se imprime siempre y no sólo cuando falla: es el que hay
 // que mirar cuando se recalibra la velocidad o el zoom.
 console.log('presupuesto de legibilidad: aviso mínimo ' + Math.round(minAviso) + ' ms (piso ' +
-  M.F.AVISO_MIN_MS + ') sobre ' + medidos + ' objetivos, con ' +
+  M.F.AVISO_MIN_MS + '), ' + cortos + ' objetivos por debajo del piso, sobre ' + medidos + ' medidos, con ' +
   ADEL_PEOR.toFixed(1) + ' px de arco por delante del palo en el PEOR caso (a VX_MAX; ' +
   ADEL_QUIETO.toFixed(1) + ' px con el palo lento)');
 console.log(fail.length ? 'FALLAS:\n- ' + fail.join('\n- ') : 'TODO OK — generador y trayectoria');

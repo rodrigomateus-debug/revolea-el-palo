@@ -17,6 +17,7 @@
     W: 134, H: 291,       // canvas lógico
     CAM: 48,              // x de pantalla donde la cámara deja el palo
     SEG: 0.09,            // cuánto del camino al objetivo recorre la cámara por frame
+    SHAKE_MAX: 7,         // el shake más grande que prende el motor (el del lanzamiento)
     VX_MAX: 10,           // techo de velocidad horizontal
     TECHO: 50,            // y mínimo
     ZOOM_VUELO: 2.5,      // cuánto se aleja la cámara durante el vuelo
@@ -42,25 +43,54 @@
     return { izq: izq, der: izq + F.W * z, arriba: arriba, abajo: arriba + F.H * z };
   }
 
-  // Cuánto se atrasa la cámara. Persigue el objetivo con un lerp de F.SEG por frame de
-  // lógica, así que si el objetivo avanza d px por frame se queda estacionada d*(1-SEG)/SEG
-  // px atrás. El palo avanza vx por paso de física y hay F.VUELO pasos de física por
-  // frame de lógica.
-  const atrasoCam = vx => Math.abs(vx) * F.VUELO * (1 - F.SEG) / F.SEG;
+  // Cuánto se atrasa la cámara respecto del palo, en px lógicos. Son dos términos y los
+  // dos son proporcionales a la velocidad:
+  // - el lerp: persigue el objetivo con F.SEG por frame de lógica, así que si el objetivo
+  //   avanza d px por frame se queda estacionado d*(1-SEG)/SEG px atrás, con
+  //   d = |vx|*VUELO (hay VUELO pasos de física por frame de lógica);
+  // - la discretización: el palo NO avanza d px por frame, avanza |vx| de golpe cada
+  //   1/VUELO frames (lo reparte g.acc) mientras el lerp corre TODOS los frames. Justo
+  //   después de un salto el atraso pica |vx|*(1-VUELO) px por encima del promedio.
+  //   Medido: sin este término el modelo prometía 195,6 px de arco por delante y el peor
+  //   frame real daba 191,6 — el presupuesto de legibilidad quedaba optimista de nuevo,
+  //   por 4 px esta vez.
+  // Se toma la mayor entre la vx de este frame y la del anterior: frenando de golpe
+  // (el pique fuerte hace c.vx*=.62 y el choque c.vx*=.22) la corrección se calcularía
+  // con la vx nueva mientras el error de g.cam todavía es el de la vieja, y la cámara no
+  // puede recuperar en un frame lo que la corrección le suelta de golpe.
+  // SEGURO, NO ESTRUCTURA: hoy este max() no lo necesita ningún test. Medido: sacándolo,
+  // el peor camino (el choque) queda 0,46 px arriba del piso en vez de 3,6 px, y no falla
+  // nada. Se deja porque la dinámica de este perseguidor ya se modeló mal dos veces en
+  // esta task, porque vive adentro de la única derivación (no puede desincronizarse del
+  // que dibuja) y porque lo que cuida es que la garantía de legibilidad se viole en
+  // silencio. Si mañana molesta, se borra a propósito y no por sorpresa: lo único que se
+  // pierde son esos 3,1 px de colchón en las frenadas bruscas.
+  const atrasoCam = (vx, vxAnt) => Math.max(Math.abs(vx), Math.abs(vxAnt || 0)) *
+    (F.VUELO * (1 - F.SEG) / F.SEG + (1 - F.VUELO));
   // Objetivo del lerp: el corrimiento se achica con la velocidad para compensar el
-  // atraso. El problema es proporcional a la velocidad (la cámara se atrasa justo
-  // cuando el palo acelera, y ahí se come el arco visible por delante), así que la
-  // corrección también: a poca velocidad el encuadre queda igual que siempre y a mucha
-  // el palo se corre hacia el borde izquierdo, que es de donde sale el arco que se
-  // recupera. Piso en 0 para que la cámara nunca se adelante al palo.
-  const camObjetivo = vx => Math.max(0, F.CAM - atrasoCam(vx));
+  // atraso. El problema es proporcional a la velocidad (la cámara se atrasa justo cuando
+  // el palo acelera, y ahí se come el arco visible por delante), así que la corrección
+  // también: a poca velocidad el encuadre queda igual que siempre. Piso en 0 para que la
+  // cámara nunca se adelante al palo.
+  const camObjetivo = (vx, vxAnt) => Math.max(0, F.CAM - atrasoCam(vx, vxAnt));
   // Dónde queda el palo en pantalla de verdad: el objetivo más lo que la cámara se
-  // atrasa. Es max(F.CAM, atrasoCam(vx)), o sea nunca peor que F.CAM.
+  // atrasa, o sea max(F.CAM, atrasoCam(vx)). OJO con la dirección: lo que se corre hacia
+  // la izquierda es el OBJETIVO del lerp (la cámara se adelanta), no el palo. El palo se
+  // queda en F.CAM hasta que el atraso lo supera y de ahí se va para la DERECHA, unos
+  // 7,6 px a VX_MAX. Contra la cámara vieja, que lo empujaba hasta 36 px a la derecha,
+  // el encuadre se mueve poco y en el otro sentido.
   const camPantalla = vx => camObjetivo(vx) + atrasoCam(vx);
   // Px de arco visibles por delante del palo: ESTE es el presupuesto de legibilidad.
   // Depende de la velocidad, así que el que mide tiene que decir a qué velocidad mide;
   // el peor caso es F.VX_MAX.
-  const adelante = (zoom, vx) => encuadre(zoom).der - camPantalla(vx);
+  // El shake entra acá porque el jugador lo ve: draw() corre el transform hasta shake px
+  // de dispositivo al azar, o sea shake*zoom/2 px lógicos, y en el peor sorteo eso se come
+  // borde derecho. Estuvo afuera del modelo un rato con la excusa de que es simétrico y
+  // transitorio; es la misma clase de omisión que ya nos mintió tres veces en esta task
+  // (la cámara escrita a mano, el régimen contra el transitorio, el promedio contra el
+  // pico discretizado). El presupuesto mide lo que se ve, no lo que se ve en promedio.
+  const adelante = (zoom, vx) =>
+    encuadre(zoom).der - camPantalla(vx) - F.SHAKE_MAX * (zoom || 1) / 2;
 
   // Un paso de física. Es la misma integración que usa el vuelo en vivo, para que
   // la predicción y la realidad no se separen nunca.

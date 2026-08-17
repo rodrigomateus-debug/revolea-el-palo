@@ -326,6 +326,17 @@ function grabar(d) { d.g.shake = 0; REC = []; d.draw(); const r = REC; REC = nul
 // el transform que quedó vigente: el zoom lo pisa después del base
 const trDe = f => (f.filter(x => x.op === 'setTransform').pop() || {}).a;
 const dev = (t, x, y) => [t[0] * x + t[4], t[3] * y + t[5]];
+// El shake NO se anula en las mediciones: el jugador lo ve, así que entra igual que en
+// Motor.adelante. Lo que sí se anota es cuánto valía cuando corrió draw(), porque el
+// corrimiento en sí es un sorteo (no se puede reconstruir) pero está acotado por ±shk px
+// de dispositivo — y esa cota es la que le sirve a la aserción de los bordes.
+let SHK = 0;
+function espiarShake(d) {
+  if (d._espiado) return;
+  const od = d.draw.bind(d);
+  d.draw = () => { SHK = d.g.shake > 0 ? d.g.shake : 0; od(); };
+  d._espiado = true;
+}
 const puntos = f => f.filter(x => x.op === 'fillRect' && x.fill === ARCO);
 // La marca se identifica por su geometría exacta (ancho del objetivo, 2 px de alto,
 // justo arriba de su cima): el pico del pelícano también es un rect dorado de 2 px
@@ -391,16 +402,17 @@ ck('sin objetivo el arco predicho sigue estando', puntos(fSin).length > 5, punto
 // "nunca crece" pero falla el cierre.
 const dr = revolear(reposo());
 let anilloCrecio = 0, cerrados = 0, frames = 0, coordsRotas = 0, rebR = 0, prevR = null, prevPO = null;
-let maxR = 0, minR = 99, arbVis = 0, arbFalt = 0, dBorde = 0, comparados = 0;
+let maxR = 0, minR = 99, arbVis = 0, arbFalt = 0, dBorde = 0, comparados = 0, exactos = 0;
 const adel = [];
 const TRONCO = '#3D2A18'; // el tronco del árbol: un color que no usa nada más
 const ENC = Motor.encuadre(Motor.F.ZOOM_VUELO);
 // Lo que el presupuesto de legibilidad de test-generador.js da por sentado: en el peor
 // caso (a VX_MAX) se ven ADEL_PEOR px de arco por delante del palo.
 const ADEL_PEOR = Motor.adelante(Motor.F.ZOOM_VUELO, Motor.F.VX_MAX);
+espiarShake(dr);
 for (let i = 0; i < 60000 && dr.g.phase === 'fly'; i++) {
-  dr.g.shake = 0;
-  REC = []; VT += 1000 / 60; dr.tick(VT); const f = REC; REC = null;
+  // El shake queda PUESTO: es parte de lo que el jugador ve y Motor.adelante lo descuenta.
+  REC = []; SHK = 0; VT += 1000 / 60; dr.tick(VT); const f = REC; REC = null;
   const t = trDe(f);
   if (t) { frames++; coordsRotas += coordsMalas(f);
     // Todo obstáculo dentro del encuadre tiene que estar dibujado. El encuadre se
@@ -412,9 +424,17 @@ for (let i = 0; i < 60000 && dr.g.phase === 'fly'; i++) {
     // instaló de verdad. Se compara contra el transform grabado, no contra la fórmula.
     // Sólo en los frames con el zoom puesto: el último frame del vuelo ya es z=1.
     if (t[0] === 2 / Motor.F.ZOOM_VUELO) { comparados++;
-      dBorde = Math.max(dBorde, Math.abs(vRf - ENC.der), Math.abs(vLf - ENC.izq));
-      // px de arco por delante del palo REALES: la cámara persigue con un lerp de .09,
-      // así que va atrasada y se ve menos de lo que promete encuadre().adelante.
+      // El shake corre el transform un valor sorteado dentro de ±SHK px de dispositivo,
+      // que en lógicos es ±SHK*z/2, y no se puede reconstruir. Así que se descuenta esa
+      // cota: en los frames sin shake (la enorme mayoría) la comparación sigue siendo
+      // exacta, y en los sacudidos se exige que la diferencia no pase de lo que el shake
+      // explica. `exactos` cuenta los primeros para que esto no se apoye en la cota.
+      const cota = SHK * Motor.F.ZOOM_VUELO / 2;
+      if (!SHK) exactos++;
+      dBorde = Math.max(dBorde,
+        Math.abs(vRf - ENC.der) - cota, Math.abs(vLf - ENC.izq) - cota);
+      // px de arco por delante del palo REALES, shake incluido: la cámara persigue con un
+      // lerp de F.SEG y va atrasada, y arriba de eso el shake se come borde.
       if (dr.g.club) adel.push(vRf - (dr.g.club.x - dr.g.cam)); }
     const vis = dr.g.obs.filter(o => o.t === 'tree' &&
       o.x - dr.g.cam + o.w >= vLf && o.x - dr.g.cam <= vRf).length;
@@ -444,6 +464,9 @@ ck('avisoMs mide el mismo campo visible que dibuja draw', dBorde < 1e-9,
   'los bordes difieren hasta ' + dBorde.toFixed(2) + ' px lógicos');
 // sin esto, un draw() que no ponga nunca el zoom dejaría la de arriba en 0 === 0
 ck('hubo frames con el zoom puesto para comparar', comparados > 1000, comparados + ' frames');
+// y que la mayoría se haya comparado SIN la cota del shake, o sea exacto
+ck('la mayoría de los frames se comparó sin cota de shake', exactos > comparados * .7,
+  exactos + ' exactos de ' + comparados);
 ck('no falta ningún obstáculo del encuadre alejado', arbFalt === 0,
   arbFalt + ' árboles visibles sin dibujar');
 // sin esto lo de arriba pasaría con 0 árboles en pantalla en todo el vuelo
@@ -455,12 +478,107 @@ console.log('render: ' + pv.length + ' puntos de arco en pantalla, anillo cerrad
 // frame: es exactamente el agujero de medir en el caso típico. Se compara contra el
 // PEOR frame del vuelo, no contra la mediana.
 adel.sort((a, b) => a - b);
+// Si `adel` quedara vacío (fixture roto) esto tiene que fallar como aserción y no
+// reventar con un TypeError en el mensaje: se exige que haya muestras.
 ck('ni el peor frame del vuelo ve menos arco por delante que el peor caso del modelo',
-  adel[0] >= ADEL_PEOR, 'el peor frame vio ' + adel[0].toFixed(1) +
-  ' px y el modelo promete ' + ADEL_PEOR.toFixed(1));
+  adel.length > 0 && adel[0] >= ADEL_PEOR,
+  adel.length ? ('el peor frame vio ' + adel[0].toFixed(1) + ' px y el modelo promete ' +
+    ADEL_PEOR.toFixed(1)) : 'no se midió ni un frame con el zoom puesto');
 console.log('encuadre: el modelo promete ' + ADEL_PEOR.toFixed(1) +
   ' px de arco por delante del palo en el peor caso; medidos en el vuelo: peor frame ' +
-  adel[0].toFixed(1) + ', mediana ' + adel[adel.length >> 1].toFixed(1));
+  (adel.length ? adel[0].toFixed(1) + ', mediana ' + adel[adel.length >> 1].toFixed(1)
+   : 'sin muestras'));
+
+// ---- frenadas bruscas: el punto ciego del modelo de cámara -----------------
+// atrasoCam supone régimen. Acelerando, el perseguidor llega al atraso de régimen desde
+// abajo (atraso real < modelo, o sea se ve MÁS arco: seguro). Frenando de golpe la
+// cuenta se da vuelta: camObjetivo se evalúa con la vx nueva mientras el error de g.cam
+// todavía es el de la vx vieja. Los dos caminos que frenan de golpe son el pique fuerte
+// (c.vx*=.62) y el choque (c.vx*=.22), y los dos llaman a buscarObjetivo() ahí mismo, o
+// sea que pueden plantar un objetivo dentro de esa ventana. El vuelo normal no los pisa,
+// así que se fuerzan.
+function tickAdel(d) {
+  espiarShake(d);
+  REC = []; SHK = 0; VT += 1000 / 60; d.tick(VT); const f = REC; REC = null;
+  const t = trDe(f);
+  if (!t || t[0] !== 2 / Motor.F.ZOOM_VUELO || !d.g.club) return null;
+  return (134 * 2 - t[4]) / t[0] - (d.g.club.x - d.g.cam);
+}
+// vuelo a máxima velocidad con la cadena andando, listo para que le frenen el palo
+function volando(frames) {
+  const d = revolear(reposo());
+  for (let i = 0; i < frames; i++) { VT += 1000 / 60; d.tick(VT);
+    if (d.g.objetivo && d.g.pasoObjetivo != null && d.g.pasosVuelo >= d.g.pasoObjetivo) d.tocar(); }
+  return d;
+}
+function trasFrenada(preparar) {
+  const d = volando(40), c = d.g.club;
+  // Estado explícito antes de medir. El vuelo que viene de arriba depende de
+  // Math.random() (el largo de la intro), y sin fijar esto el fixture era flaky: una
+  // corrida forzó el pique justo arriba de un bunker, que termina el tiro en un frame
+  // ('vx 9.95 -> 0.00 en 1 frames') y no mide nada. Los bunkers se sacan porque el
+  // fixture es sobre la cámara, no sobre dónde cae el palo.
+  d.g.bunkers = [];
+  c.y = 100; c.vy = -1; c.grounded = false; c.crashed = false;
+  // El punto ciego es frenar DESDE la velocidad máxima, no desde una cualquiera: se lo
+  // lleva a VX_MAX y se deja que la cámara llegue al régimen de esa velocidad (ahí el
+  // corrimiento en pantalla vale atrasoCam(VX_MAX), el máximo posible). Se lo mantiene
+  // en el aire porque lo único que importa acá es la x.
+  for (let i = 0; i < 60; i++) { c.vx = Motor.F.VX_MAX;
+    if (c.y > 140) { c.y = 100; c.vy = -1; } tickAdel(d); }
+  const antes = tickAdel(d), vxAntes = c.vx;
+  preparar(d, c);
+  let peor = Infinity, vistos = 0, vxJusto = null;
+  for (let i = 0; i < 120 && d.g.phase === 'fly'; i++) {
+    const a = tickAdel(d);
+    // La vx apenas frenado: es la que dice qué rama del motor corrió (*.62 el pique
+    // fuerte, *.22 el choque). Se agarra el PRIMER recorte de verdad y no un frame fijo:
+    // un frame puede no ejecutar ningún paso de física (los reparte g.acc a VUELO por
+    // frame), y unos frames más tarde el palo raspando el suelo se choca un árbol y ese
+    // *.22 tapaba el *.62 que se quería observar. El arrastre nunca llega al 10%.
+    if (vxJusto === null && d.g.club && d.g.club.vx < vxAntes * .9) vxJusto = d.g.club.vx;
+    if (a !== null) { peor = Math.min(peor, a); vistos++; }
+  }
+  return { peor: peor, vistos: vistos, antes: antes, vxAntes: vxAntes,
+           vxJusto: vxJusto === null ? vxAntes : vxJusto,
+           choco: !!(d.g.club && d.g.club.crashed) };
+}
+// pique fuerte: se lo deja llegar al suelo con |vy| > 3, que es el umbral de `hard`
+const pique = trasFrenada((d, c) => { c.y = Motor.F.GY - 1; c.vy = 5; c.grounded = false; });
+// choque: se planta un obstáculo pegado atrás del palo (no es el objetivo, así que no
+// tiene el pase de "plataforma de rebote") y se pone al palo a su altura
+const choque = trasFrenada((d, c) => {
+  const t = Motor.TIPOS.tree, o = { t: 'tree', x: Math.round(c.x) - 1, w: t.w, h: t.h,
+    cima: Motor.F.GY - t.h };
+  const i = d.g.obs.findIndex(q => q.x >= o.x);
+  d.g.obs.splice(i < 0 ? d.g.obs.length : i, 0, o);
+  c.y = Motor.F.GY - t.h + 3;
+});
+// Que las frenadas hayan CORRIDO de verdad va primero: sin frames medidos `peor` queda
+// en Infinity y las dos aserciones de abajo pasarían sin haber mirado nada.
+ck('la frenada por pique fuerte corrió la rama del motor (c.vx*=.62)',
+  pique.vistos > 10 && pique.vxJusto < pique.vxAntes * .75 && pique.vxJusto > pique.vxAntes * .4,
+  'vx ' + pique.vxAntes.toFixed(2) + ' -> ' + pique.vxJusto.toFixed(2) +
+  ' en ' + pique.vistos + ' frames');
+ck('la frenada por choque corrió la rama del motor (c.vx*=.22)',
+  choque.vistos > 10 && choque.choco && choque.vxJusto < choque.vxAntes * .3,
+  'vx ' + choque.vxAntes.toFixed(2) + ' -> ' + choque.vxJusto.toFixed(2) +
+  ', crashed=' + choque.choco + ', ' + choque.vistos + ' frames');
+// Y el punto: frenar de golpe no puede dejar ver menos arco del que el presupuesto
+// supone. Es el mismo piso que la aserción del vuelo normal, sobre el camino que el
+// vuelo normal no pisa.
+ck('el pique fuerte no deja ver menos arco que el peor caso del modelo',
+  pique.peor >= ADEL_PEOR, 'el peor frame vio ' + pique.peor.toFixed(1) +
+  ' px y el modelo promete ' + ADEL_PEOR.toFixed(1));
+ck('el choque no deja ver menos arco que el peor caso del modelo',
+  choque.peor >= ADEL_PEOR, 'el peor frame vio ' + choque.peor.toFixed(1) +
+  ' px y el modelo promete ' + ADEL_PEOR.toFixed(1));
+console.log('frenada por pique fuerte: vx ' + pique.vxAntes.toFixed(2) + ' -> ' +
+  pique.vxJusto.toFixed(2) + ' (arco antes ' + pique.antes.toFixed(1) +
+  '), peor arco por delante ' + pique.peor.toFixed(1) + ' px en ' + pique.vistos + ' frames');
+console.log('frenada por choque:       vx ' + choque.vxAntes.toFixed(2) + ' -> ' +
+  choque.vxJusto.toFixed(2) + ' (arco antes ' + choque.antes.toFixed(1) +
+  '), peor arco por delante ' + choque.peor.toFixed(1) + ' px en ' + choque.vistos + ' frames');
 
 console.log('distancia del vuelo de prueba: ' + dist + ' m');
 console.log('picos: obs=' + maxObs + ' pel=' + maxPel);

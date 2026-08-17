@@ -552,7 +552,10 @@ class Component extends DCLogic{
     g.club={x:TEE+8,y:GY-44,vx:Math.cos(a)*v,vy:-Math.sin(a)*v,rot:-a,
       spin:Math.max(.22,.19+g.locked*.24),grounded:false,trail:[]};
     g.phase='fly';g.flyT=0;g.pasosVuelo=0;g.mult=1;g.rageT=240;
-    this.txt(this.rHint,'Tocá justo cuando llegue');g.fx.push({x:TEE+14,y:GY-42,t:20});g.shake=7;this.sfxLaunch();
+    this.txt(this.rHint,'Tocá justo cuando llegue');g.fx.push({x:TEE+14,y:GY-42,t:20});
+    // El shake más grande de todos, y Motor.adelante le descuenta al presupuesto de
+    // legibilidad justo este: si acá se sube el número, hay que subir F.SHAKE_MAX.
+    g.shake=Motor.F.SHAKE_MAX;this.sfxLaunch();
     if(g.perfect)this.showFloat('¡PERFECTO!');
     this.op(this.rMetros,'1');
     this.buscarObjetivo();
@@ -825,7 +828,11 @@ class Component extends DCLogic{
       // son los mismos de los que Motor.adelante saca cuánto arco se ve por delante del
       // palo, y de ahí el aviso mínimo. Escritos acá a mano, la cámara y el presupuesto
       // de legibilidad se separan sin que nada avise.
-      g.cam+=((Math.max(0,c.x-Motor.camObjetivo(c.vx)))-g.cam)*Motor.F.SEG;
+      // g.vxAnt: la vx del frame anterior. camObjetivo se queda con la mayor de las dos
+      // para que una frenada de golpe no le suelte la corrección más rápido de lo que la
+      // cámara puede seguir.
+      g.cam+=((Math.max(0,c.x-Motor.camObjetivo(c.vx,g.vxAnt)))-g.cam)*Motor.F.SEG;
+      g.vxAnt=c.vx;
       if(g.hudT%3===0)this.txt(this.rMetros,Math.round(Math.max(0,(c.x-TEE)/PXM))+' M');
       this.cull(g.obs,g.cam-160);
       this.cull(g.pel,g.cam*0.62-40);
