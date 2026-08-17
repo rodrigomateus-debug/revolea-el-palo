@@ -35,6 +35,7 @@ const HTML = `<!DOCTYPE html>
 <link rel="preload" as="image" href="./miguelon/palo.svg">
 <link rel="preload" as="image" href="./miguelon/p_01_reposo.svg">
 <link rel="preload" as="image" href="./miguelon/p_09_carga.svg">
+<script src="motor.js"></script>
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Anton&family=Archivo:wght@400;600;700&display=swap">
 <style>
 :root{--font-display:Anton,Impact,sans-serif;--font-body:Archivo,system-ui,sans-serif;--s:1}
