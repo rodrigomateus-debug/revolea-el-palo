@@ -467,7 +467,9 @@ class Component extends DCLogic{
 
   startMusic(){if(this.props.sonido===false)return;
     if(!this._introAudio){const a=new Audio('miguelon/intro-music.mp3');a.loop=false;a.volume=0.5;this._introAudio=a;
-      const t=new Audio('miguelon/title-music.mp3');t.loop=true;t.volume=0.5;this._titleAudio=t;
+      // El loop del título pesa 3,7 MB y no suena hasta que termina la intro:
+      // preload='none' evita bajarlo en el primer toque, sobre todo con datos.
+      const t=new Audio('miguelon/title-music.mp3');t.loop=true;t.volume=0.5;t.preload='none';this._titleAudio=t;
       a.addEventListener('ended',()=>{if(this.state.screen==='title'&&this.props.sonido!==false){const p=t.play();if(p&&p.catch)p.catch(()=>{});}});}
     try{const p=this._introAudio.play();if(p&&p.catch)p.catch(()=>{});}catch(e){}}
   stopMusic(){if(this._introAudio){try{this._introAudio.pause();}catch(e){}}if(this._titleAudio){try{this._titleAudio.pause();}catch(e){}}}
