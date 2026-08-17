@@ -25,6 +25,9 @@ ck('perfecto sube el combo', M.comboTras(7, 'perfecto') === 8);
 ck('bueno lo mantiene', M.comboTras(7, 'bueno') === 7);
 ck('raspón lo parte al medio', M.comboTras(8, 'raspon') === 4);
 ck('el combo nunca baja de 1', M.comboTras(1, 'raspon') === 1);
+// 8/2 y 1/2-clampeado dan lo mismo con floor, ceil o round: no alcanzan para
+// distinguirlos. Un combo impar mayor a 1 sí: floor(5/2)=2, ceil/round dan 3.
+ck('raspón redondea la mitad para abajo', M.comboTras(5, 'raspon') === 2, M.comboTras(5, 'raspon'));
 
 // --- puntaje ---
 ck('acredita metros por combo', M.acreditar(5, 40) === 200, M.acreditar(5, 40));
@@ -36,6 +39,11 @@ ck('el primero rinde pleno', M.factorVariedad([], 'tree') === 1);
 ck('repetir rinde menos',
   M.factorVariedad(['tree', 'tree'], 'tree') < M.factorVariedad(['cart'], 'tree'));
 ck('variar rinde pleno', M.factorVariedad(['tree', 'tree'], 'cart') === 1);
+// Discrimina la racha final de un conteo total: si contara todas las apariciones
+// daría 0.5, pero la racha final es 'cart', así que 'tree' arranca de nuevo.
+ck('sólo cuenta la racha final, no el historial',
+  M.factorVariedad(['tree', 'cart'], 'tree') === 1,
+  M.factorVariedad(['tree', 'cart'], 'tree'));
 
 console.log(fail.length ? 'FALLAS:\n- ' + fail.join('\n- ') : 'TODO OK — rebote, combo, puntaje y variedad');
 process.exit(fail.length ? 1 : 0);
