@@ -25,9 +25,19 @@ function el() {
 
 const CTX_METHODS = ['fillRect','drawImage','save','restore','translate','rotate','beginPath',
   'arc','ellipse','moveTo','lineTo','fill','stroke','setLineDash','setTransform','fillText','clearRect'];
+// Cuando REC es un array, cada llamada al contexto queda anotada con los colores
+// vigentes. Es lo que reemplaza al "verificar a ojo en el navegador": el entorno de
+// desarrollo no compone frames, así que en vez de mirar el dibujo se lo graba.
+let REC = null;
+// save/restore apilan el estado de verdad: sin eso strokeStyle se quedaba pegado en
+// el último color asignado y cualquier arc posterior parecía dibujado con él.
+const ESTADO = ['fillStyle','strokeStyle','lineWidth','globalAlpha','font','textAlign'];
 function ctx2d() {
-  const o = {};
-  for (const k of CTX_METHODS) o[k] = () => { if (stats[k] !== undefined) stats[k]++; };
+  const o = {}, pila = [];
+  for (const k of CTX_METHODS) o[k] = (...a) => { if (stats[k] !== undefined) stats[k]++;
+    if (k === 'save') pila.push(ESTADO.map(x => o[x]));
+    else if (k === 'restore') { const s = pila.pop(); if (s) ESTADO.forEach((x, i) => { o[x] = s[i]; }); }
+    if (REC) REC.push({ op: k, a: a, fill: o.fillStyle, stroke: o.strokeStyle }); };
   return new Proxy(o, {
     set(t, k, v) { if (k === 'fillStyle') stats.fillStyleSets++; t[k] = v; return true; },
   });
@@ -288,6 +298,137 @@ VT = 2e6; d.componentDidMount(); d.start();
 let burst = 0; const o2 = d.step.bind(d); d.step = () => { burst++; o2(); };
 VT += 5000; d.tick(VT);
 ck('hueco de 5 s no dispara catch-up', burst <= 4, burst + ' pasos');
+
+// ---- lo que el jugador tiene que VER (Task 6) -----------------------------
+// El paso 3 del brief pedía verificar a ojo en el navegador. El entorno no compone
+// frames (la captura se cuelga), así que se verifica sobre las llamadas al contexto:
+// se graba cada draw() y se afirma lo que un humano miraría. Lo que NO cubre esto:
+// si el pixel art se lee bien al zoom de 2,5x. Eso es juicio humano y queda abierto.
+const ARCO = 'rgba(244,238,218,.35)', ORO = '#E8C34A';
+const PROPS = { tiros: 3, censura: 'Sin filtro', viento: false, sonido: false };
+function reposo() {
+  const d = new Component();
+  d.props = PROPS;
+  VT += 1e5; d.componentDidMount(); d.start();
+  if (!until(d, () => d.g.phase === 'ready')) throw new Error('la intro no terminó');
+  // misma semilla que el vuelo de arriba: escenario reproducible
+  d.g.rand = Motor.lcg(20260817); d.g.obs = Motor.generar(d.g.rand, 430, 20000);
+  d.g.shake = 0; return d;
+}
+// El shake se pone en 0 antes de cada frame para que el transform no lleve el
+// corrimiento aleatorio y las cuentas de cobertura sean exactas.
+function revolear(d) {
+  d.begin(); for (let i = 0; i < 90; i++) { VT += 1000 / 60; d.tick(VT); }
+  d.fire(); for (let i = 0; i < 20; i++) { VT += 1000 / 60; d.tick(VT); }
+  d.g.shake = 0; return d;
+}
+function grabar(d) { d.g.shake = 0; REC = []; d.draw(); const r = REC; REC = null; return r; }
+// el transform que quedó vigente: el zoom lo pisa después del base
+const trDe = f => (f.filter(x => x.op === 'setTransform').pop() || {}).a;
+const dev = (t, x, y) => [t[0] * x + t[4], t[3] * y + t[5]];
+const puntos = f => f.filter(x => x.op === 'fillRect' && x.fill === ARCO);
+// La marca se identifica por su geometría exacta (ancho del objetivo, 2 px de alto,
+// justo arriba de su cima): el pico del pelícano también es un rect dorado de 2 px
+// de alto y con un filtro sólo por color contaba como marca.
+const marca = (f, o) => f.filter(x => x.op === 'fillRect' && x.fill === ORO &&
+  x.a[3] === 2 && x.a[2] === o.w && x.a[1] === Math.round(o.cima - 2));
+const anillo = f => f.filter(x => x.op === 'arc' && x.stroke === ORO);
+// ¿algún fillRect tapa este punto del canvas (en px de dispositivo)?
+const tapado = (f, t, x, y) => f.some(p => p.op === 'fillRect' &&
+  x >= t[0] * p.a[0] + t[4] && x <= t[0] * (p.a[0] + p.a[2]) + t[4] &&
+  y >= t[3] * p.a[1] + t[5] && y <= t[3] * (p.a[1] + p.a[3]) + t[5]);
+const esquinasSinPintar = (f) => { const t = trDe(f); let n = 0;
+  for (const x of [0, 134 * 2]) for (const y of [0, 291 * 2]) if (!tapado(f, t, x, y)) n++;
+  return n; };
+// NaN/undefined en cualquier coordenada. Con {alpha:false} y sin clearRect un NaN no
+// tira excepción: pinta cualquier cosa y el frame sale roto en silencio.
+const CON_COORDS = new Set(['fillRect','arc','ellipse','moveTo','lineTo','translate',
+  'rotate','setTransform','clearRect','drawImage','fillText']);
+function coordsMalas(f) { let n = 0;
+  for (const p of f) { if (!CON_COORDS.has(p.op)) continue;
+    for (const v of p.a) { if (typeof v === 'number') { if (!Number.isFinite(v)) n++; }
+      else if (v === undefined) n++; } }
+  return n; }
+
+const dv = reposo();
+const fRep = grabar(dv);
+ck('fuera del vuelo la escala es 2', trDe(fRep)[0] === 2 && trDe(fRep)[3] === 2, trDe(fRep));
+ck('fuera del vuelo el fondo tapa las 4 esquinas', esquinasSinPintar(fRep) === 0,
+  esquinasSinPintar(fRep) + ' esquinas sin pintar');
+ck('fuera del vuelo no hay arco predicho', puntos(fRep).length === 0, puntos(fRep).length);
+revolear(dv);
+const fVue = grabar(dv), tVue = trDe(fVue);
+const ESC = 2 / Motor.F.ZOOM_VUELO;
+ck('en vuelo la escala es 2/ZOOM_VUELO', tVue[0] === ESC && tVue[3] === ESC, tVue);
+// El zoom ensancha el encuadre a W*z: si los fondos siguen midiendo W+16 quedan
+// franjas sin pintar, y sin clearRect ahí queda basura del frame anterior.
+ck('en vuelo el fondo tapa las 4 esquinas', esquinasSinPintar(fVue) === 0,
+  esquinasSinPintar(fVue) + ' esquinas sin pintar');
+const pv = puntos(fVue);
+ck('el arco predicho se dibuja', pv.length > 5, pv.length + ' puntos');
+// Sin recorte el arco son ~100 puntos de hasta 6.000 px: casi todos afuera del
+// canvas. Se tolera 1 px por el Math.round de px() en el borde exacto del encuadre.
+let afuera = 0;
+for (const p of pv) { const [x, y] = dev(tVue, p.a[0], p.a[1]);
+  if (x < -1 || y < -1 || x > 134 * 2 + 1 || y > 291 * 2 + 1) afuera++; }
+ck('todos los puntos del arco caen dentro del canvas', afuera === 0,
+  afuera + ' de ' + pv.length + ' afuera');
+const obj = dv.g.objetivo;
+ck('con objetivo hay marca dorada sobre su cima', marca(fVue, obj).length === 1,
+  marca(fVue, obj).length + ' marcas');
+ck('con objetivo hay anillo de timing', anillo(fVue).length === 1, anillo(fVue).length + ' anillos');
+dv.g.objetivo = null;
+const fSin = grabar(dv);
+ck('sin objetivo no hay marca ni anillo',
+  marca(fSin, obj).length === 0 && anillo(fSin).length === 0,
+  marca(fSin, obj).length + ' marcas, ' + anillo(fSin).length + ' anillos');
+// que el frame sin objetivo siga dibujando el arco es lo que hace específica a la
+// aserción de arriba: no pasa por "en ese frame no se dibujó nada".
+ck('sin objetivo el arco predicho sigue estando', puntos(fSin).length > 5, puntos(fSin).length);
+
+// El anillo se cierra: dentro de un mismo objetivo el radio nunca crece, y al menos
+// uno tiene que ir de ancho (>=20) a apretado (<=3). Un radio constante pasaría el
+// "nunca crece" pero falla el cierre.
+const dr = revolear(reposo());
+let anilloCrecio = 0, cerrados = 0, frames = 0, coordsRotas = 0, rebR = 0, prevR = null, prevPO = null;
+let maxR = 0, minR = 99, arbVis = 0, arbFalt = 0;
+const TRONCO = '#3D2A18'; // el tronco del árbol: un color que no usa nada más
+for (let i = 0; i < 60000 && dr.g.phase === 'fly'; i++) {
+  dr.g.shake = 0;
+  REC = []; VT += 1000 / 60; dr.tick(VT); const f = REC; REC = null;
+  const t = trDe(f);
+  if (t) { frames++; coordsRotas += coordsMalas(f);
+    // Todo obstáculo dentro del encuadre tiene que estar dibujado. El encuadre se
+    // despeja del transform grabado (X en el borde del canvas), no de la fórmula del
+    // motor, así que un recorrido que corte en W deja árboles sin dibujar en la
+    // mitad derecha de la pantalla alejada y esto lo ve.
+    const vLf = -t[4] / t[0], vRf = (134 * 2 - t[4]) / t[0];
+    const vis = dr.g.obs.filter(o => o.t === 'tree' &&
+      o.x - dr.g.cam + o.w >= vLf && o.x - dr.g.cam <= vRf).length;
+    const troncos = f.filter(x => x.op === 'fillRect' && x.fill === TRONCO).length;
+    arbVis += vis; if (troncos < vis) arbFalt += vis - troncos; }
+  const ar = anillo(f), po = dr.g.pasoObjetivo;
+  if (ar.length === 1) {
+    const r = ar[0].a[2];
+    if (po !== prevPO) { if (maxR >= 20 && minR <= 3) cerrados++; maxR = 0; minR = 99; }
+    else if (prevR !== null && r > prevR) anilloCrecio++;
+    maxR = Math.max(maxR, r); minR = Math.min(minR, r); prevR = r; prevPO = po;
+  }
+  if (rebR < 12 && dr.g.objetivo && dr.g.pasoObjetivo != null &&
+      dr.g.pasosVuelo >= dr.g.pasoObjetivo) { rebR++; dr.tocar(); }
+}
+ck('el anillo nunca se agranda mientras apunta al mismo objetivo', anilloCrecio === 0,
+  anilloCrecio + ' frames en que creció');
+ck('el anillo se cierra de ancho a apretado en varios objetivos', cerrados >= 3,
+  'sólo ' + cerrados + ' objetivos con el anillo cerrándose entero');
+ck('ninguna coordenada NaN/undefined en todo el vuelo', coordsRotas === 0,
+  coordsRotas + ' coordenadas rotas en ' + frames + ' frames');
+ck('no falta ningún obstáculo del encuadre alejado', arbFalt === 0,
+  arbFalt + ' árboles visibles sin dibujar');
+// sin esto lo de arriba pasaría con 0 árboles en pantalla en todo el vuelo
+ck('hubo árboles en pantalla para verificar', arbVis > 100, arbVis + ' árbol-frames');
+console.log('render: ' + pv.length + ' puntos de arco en pantalla, anillo cerrado entero en ' +
+  cerrados + ' objetivos, ' + arbVis + ' árbol-frames, ' + frames + ' frames grabados');
 
 console.log('distancia del vuelo de prueba: ' + dist + ' m');
 console.log('picos: obs=' + maxObs + ' pel=' + maxPel);

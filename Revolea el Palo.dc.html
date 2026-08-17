@@ -865,11 +865,25 @@ class Component extends DCLogic{
     ctx.setTransform(2,0,0,2,shk?(Math.random()-.5)*shk*2:0,shk?(Math.random()-.5)*shk*2:0);
     ctx.imageSmoothingEnabled=false;
     const cam=g.cam;
-    // Los fondos sangran 8 px fuera del canvas: con el shake el transform corre
-    // todo hasta 7 px y antes quedaba una franja sin pintar en el borde.
-    this.px(-8,-8,W+16,GY+8,'#D9E8DC');
-    this.px(-8,58,W+16,34,'#C7DFCE');
-    this.px(-8,92,W+16,26,'#B7D4C2');
+    // Durante el vuelo se aleja la cámara: con el encuadre de 134 px un obstáculo
+    // entraba en pantalla 0,16 s antes de alcanzarlo y no había cómo reaccionar.
+    const z=g.phase==='fly'?Motor.F.ZOOM_VUELO:1;
+    if(z!==1){ctx.setTransform(2/z,0,0,2/z,
+      (shk?(Math.random()-.5)*shk*2:0)+W*(z-1)/3,
+      (shk?(Math.random()-.5)*shk*2:0)+GY*(z-1)/2);}
+    // Encuadre visible en unidades lógicas, despejado del transform de arriba:
+    // un punto lógico X cae en 2X/z + corrimiento, así que se ve de vL a vR y de
+    // vT a vB. Con z=1 esto da 0..W y 0..H, o sea lo de siempre. Se despeja acá y
+    // no a ojo porque con z=2,5 el ancho visible es 335 px: los recorridos que
+    // cortaban en W dejaban de dibujar los obstáculos de la mitad derecha de la
+    // pantalla, que son justo los que el jugador necesita ver venir.
+    const vL=-W*(z-1)*z/6,vR=vL+W*z,vT=-GY*(z-1)*z/4,vB=vT+H*z;
+    // Los fondos sangran 8 px (escalados) fuera del encuadre: con el shake el
+    // transform corre todo hasta 7 px y antes quedaba una franja sin pintar.
+    const bl=8*z,fx0=vL-bl,fw=W*z+bl*2,fy0=vT-bl,fy1=vB+bl;
+    this.px(fx0,fy0,fw,GY-fy0,'#D9E8DC');
+    this.px(fx0,58,fw,34,'#C7DFCE');
+    this.px(fx0,92,fw,26,'#B7D4C2');
     this.fs('#F4EEDA');ctx.beginPath();ctx.arc(104,44,13,0,7);ctx.fill();
     const h1=-((cam*.14)%96);
     for(let i=-1;i<4;i++){const bx=h1+i*96;this.px(bx,164,96,GY-164,'#2E7D4F');
@@ -877,15 +891,15 @@ class Component extends DCLogic{
     const h2=-((cam*.36)%74);
     for(let i=-1;i<4;i++){const bx=h2+i*74;this.px(bx,192,74,GY-192,'#256B43');
       this.fs('#256B43');ctx.beginPath();ctx.ellipse(bx+37,194,42,11,0,Math.PI,0);ctx.fill();}
-    this.px(-8,GY,W+16,H-GY+8,'#1C5638');
-    for(const p of (g.pel||[])){const pxx=p.x-cam*0.62;if(pxx<-24)continue;if(pxx>W+24)break;
+    this.px(fx0,GY,fw,fy1-GY,'#1C5638');
+    for(const p of (g.pel||[])){const pxx=p.x-cam*0.62;if(pxx<vL-24)continue;if(pxx>vR+24)break;
       const fl=Math.sin(this.now()/260+p.ph);
       this.drawArt(FAUNA_ART.pelicano,pxx,p.y+fl*3,2);}
-    for(let i=0;i<10;i++)this.px(-8,GY+2+i*7,W+16,3,i%2?'#1A5034':'#1C5638');
+    for(let i=0,nf=(fy1-GY)/7;i<nf;i++)this.px(fx0,GY+2+i*7,fw,3,i%2?'#1A5034':'#1C5638');
     // Antes eran 60 y 141 iteraciones fijas de las que sólo ~4 y ~3 caían dentro
     // del canvas; ahora se recorre nada más el tramo visible.
-    for(let wx=-((cam*.9)%41);wx<W;wx+=41)this.px(wx,GY-3,2,3,'#2E7D4F');
-    for(const b of g.bunkers){const bx=b.x-cam;if(bx+b.w<0)continue;if(bx>W)break;
+    for(let wx=Math.floor(fx0/41)*41-((cam*.9)%41);wx<vR;wx+=41)this.px(wx,GY-3,2,3,'#2E7D4F');
+    for(const b of g.bunkers){const bx=b.x-cam;if(bx+b.w<vL)continue;if(bx>vR)break;
       this.px(bx,GY-2,b.w,12,'#E7DFCA');this.px(bx+3,GY,b.w-6,4,'#D6C79A')}
     for(const gwx of (g.greens||[])){const gx=gwx-cam;
     if(gx>-140&&gx<W+140){
@@ -908,13 +922,13 @@ class Component extends DCLogic{
       this.fs('#E8C34A');ctx.beginPath();ctx.moveTo(fx+4,GY-30);ctx.lineTo(fx+16,GY-26);ctx.lineTo(fx+4,GY-21);ctx.fill();
       if(g.ball){this.px(g.ball.x-cam,g.ball.y-2,3,3,'#F4EEDA')}
     }
-    for(const n of (g.nut||[])){const nx2=n.x-cam;if(nx2<-30)continue;if(nx2>W+30)break;
+    for(const n of (g.nut||[])){const nx2=n.x-cam;if(nx2<vL-30)continue;if(nx2>vR+30)break;
       const bob=Math.sin(this.now()/420+n.ph)>0?0:1;
       this.drawArt(FAUNA_ART.nutria,nx2,GY-8+bob,2);}
-    for(const z of (g.zor||[])){const zx2=z.x-cam;if(zx2<-36)continue;if(zx2>W+36)break;
-      const j=Math.abs(Math.sin(this.now()/560+z.ph));
+    for(const zo of (g.zor||[])){const zx2=zo.x-cam;if(zx2<vL-36)continue;if(zx2>vR+36)break;
+      const j=Math.abs(Math.sin(this.now()/560+zo.ph));
       this.drawArt(FAUNA_ART.zorro,zx2,GY-12-j*16,2);}
-    for(const o of g.obs){const ox=o.x-cam;if(ox+o.w<-34)continue;if(ox>W+34)break;
+    for(const o of g.obs){const ox=o.x-cam;if(ox+o.w<vL-34)continue;if(ox>vR+34)break;
       if(o.t==='tree'){this.px(ox+10,GY-18,6,18,'#3D2A18');
         this.fs(o.hit?'#6FAE87':'#14402A');ctx.beginPath();ctx.arc(ox+13,GY-32,15,0,7);ctx.fill();
         this.fs(o.hit?'#8FC7A3':'#1C5638');ctx.beginPath();ctx.arc(ox+8,GY-37,9,0,7);ctx.fill();}
@@ -968,7 +982,7 @@ class Component extends DCLogic{
       for(let i=6;i<len;i+=4)this.px(ox+Math.cos(a)*i,oy-Math.sin(a)*i,2,2,'rgba(244,238,218,.9)');
       this.px(ox+Math.cos(a)*R,oy-Math.sin(a)*R,4,4,'#E8C34A');
     }
-    for(const hp of (g.helpers||[])){hp.t++;const hx=hp.x-hp.cam0-(cam-hp.cam0)*0.18;if(hx<-30||hx>W+30)continue;
+    for(const hp of (g.helpers||[])){hp.t++;const hx=hp.x-hp.cam0-(cam-hp.cam0)*0.18;if(hx<vL-30||hx>vR+30)continue;
       const k=Math.min(1,hp.t/18),ease=1-(1-k)*(1-k);
       const fx2=hx+hp.dir*40*(1-ease),fy=hp.y+24*(1-ease)+Math.sin((this.now()+hp.x*7)/420)*2;
       ctx.save();ctx.globalAlpha=.5+.5*ease;this.drawArt(HELPER_ART[hp.k],fx2,fy,2);ctx.restore();this._fs=null;}
@@ -979,6 +993,32 @@ class Component extends DCLogic{
       for(let i=6;i<len;i+=4)this.px(ox+dir*Math.cos(a)*i,oy-Math.sin(a)*i,2,2,'rgba(244,238,218,.9)');
       this.px(ox+dir*Math.cos(a)*len,oy-Math.sin(a)*len,4,4,'#E8C34A');
       this.px(ng-cam-1,GY-40,2,6,'#E8C34A');
+    }
+    // Arco predicho: convierte "adivinar" en "leer". Se ve a qué se le va a pegar,
+    // así la única destreza que queda es el timing.
+    if(g.phase==='fly'&&g.club&&!g.club.grounded){
+      const tr=Motor.trayectoria({x:g.club.x,y:g.club.y,vx:g.club.vx,vy:g.club.vy},600);
+      // Se corta en el borde del encuadre: 600 pasos son hasta 6.000 px de arco y
+      // sin el corte casi todos los fillRect caían fuera del canvas.
+      // Un punto cada 3 pasos y de z px de lado (o sea 2 px de dispositivo, el mismo
+      // tamaño en pantalla a cualquier zoom): con el punto de 1 px cada 6 pasos del
+      // diseño original el palo avanza ~8 px por paso y quedaban 4 puntos de 0,4 px
+      // en pantalla — medido, no estimado. Eso no se lee como un arco.
+      for(let i=3;i<tr.length;i+=3){const ax=tr[i].x-cam;if(ax>vR)break;
+        if(ax>=vL)this.px(ax,tr[i].y,z,z,'rgba(244,238,218,.35)');}
+      const o=g.objetivo;
+      if(o){
+        // marca del punto de impacto
+        this.px(o.x-cam,o.cima-2,o.w,2,'#E8C34A');
+        // anillo que se cierra: señal del toque
+        if(g.pasoObjetivo!=null){
+          const faltan=g.pasoObjetivo-(g.pasosVuelo||0);
+          const r=Math.max(2,Math.min(26,faltan*0.5));
+          ctx.save();ctx.strokeStyle='#E8C34A';ctx.lineWidth=1;
+          ctx.beginPath();ctx.arc(o.x-cam+o.w/2,o.cima,r,0,7);ctx.stroke();
+          ctx.restore();this._fs=null;
+        }
+      }
     }
     if(g.club&&(g.phase==='fly'||g.phase==='done'||g.phase==='putt'||g.phase==='puttcharge')){
       const c=g.club;
