@@ -156,9 +156,46 @@
     return Math.max(0, (pasoLlegada - pasoVisible) * (F.STEP / F.VUELO));
   }
 
+  // Impulso de rebote. El perfecto devuelve la energía entera, así que un jugador
+  // impecable no baja nunca: el techo del score es su pulso, no una constante.
+  const IMPULSO = 7.4;
+
+  function resolverRebote(est, desfaseMs) {
+    const d = Math.abs(desfaseMs);
+    if (d <= F.VENTANA_PERFECTO)
+      return { tipo: 'perfecto', vy: -IMPULSO, vx: Math.min(F.VX_MAX, est.vx * 1.06 + 0.4) };
+    if (d <= F.VENTANA_BUENO)
+      return { tipo: 'bueno', vy: -IMPULSO * 0.62, vx: Math.min(F.VX_MAX, est.vx) };
+    // Raspón: pierde 35% de velocidad y no gana altura. No termina el vuelo por sí
+    // solo; el palo baja y el jugador todavía puede recuperarse antes del suelo.
+    return { tipo: 'raspon', vy: Math.max(0.5, est.vy * 0.5), vx: est.vx * 0.65 };
+  }
+
+  function comboTras(combo, tipo) {
+    if (tipo === 'perfecto') return combo + 1;
+    if (tipo === 'bueno') return combo;
+    return Math.max(1, Math.floor(combo / 2));
+  }
+
+  // Se acredita al llegar al obstáculo con el combo vigente ANTES de aplicar el
+  // resultado: el tramo que acabás de volar se paga a la tasa que te habías ganado.
+  function acreditar(combo, metrosTramo) {
+    return Math.max(0, Math.round(metrosTramo * combo));
+  }
+
+  // Repetir el mismo tipo de rebote rinde cada vez menos. Es la profundidad más
+  // allá del timing: obliga a variar objetivos en vez de repetir un único óptimo.
+  function factorVariedad(ultimos, tipoObs) {
+    let repes = 0;
+    for (let i = ultimos.length - 1; i >= 0 && ultimos[i] === tipoObs; i--) repes++;
+    return 1 / (1 + repes);
+  }
+
   const api = { F: F, acotar: acotar, metros: metros, paso: paso, trayectoria: trayectoria,
                 TIPOS: TIPOS, lcg: lcg, generar: generar, alcanzables: alcanzables,
-                cruzaCima: cruzaCima, rellenar: rellenar, avisoMs: avisoMs };
+                cruzaCima: cruzaCima, rellenar: rellenar, avisoMs: avisoMs,
+                resolverRebote: resolverRebote, comboTras: comboTras, acreditar: acreditar,
+                factorVariedad: factorVariedad, IMPULSO: IMPULSO };
   if (typeof module !== 'undefined' && module.exports) module.exports = api;
   else raiz.Motor = api;
 })(typeof window !== 'undefined' ? window : globalThis);
