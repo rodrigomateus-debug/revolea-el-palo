@@ -1,0 +1,24 @@
+{
+  "name": "Revoleá el palo — SDGA",
+  "short_name": "Revoleá el palo",
+  "description": "Miguelón perdió el hoyo. Ahora vuela el palo. Tres tiros, combos y ranking.",
+  "lang": "es-AR",
+  "dir": "ltr",
+  "start_url": "./",
+  "scope": "./",
+  "id": "sdga-revolea-el-palo",
+  "display": "fullscreen",
+  "display_override": ["fullscreen", "standalone"],
+  "orientation": "portrait",
+  "background_color": "#0C2B1C",
+  "theme_color": "#0C2B1C",
+  "categories": ["games", "entertainment"],
+  "icons": [
+    {
+      "src": "./miguelon/sdga-logo.svg",
+      "sizes": "any",
+      "type": "image/svg+xml",
+      "purpose": "any"
+    }
+  ]
+}

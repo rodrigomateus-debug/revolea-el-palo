@@ -1,0 +1,1082 @@
+<!DOCTYPE html>
+<html lang="es-AR">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover,maximum-scale=1,user-scalable=no">
+<title>Revoleá el palo</title>
+<meta name="description" content="Miguelón perdió el hoyo. Ahora vuela el palo.">
+<meta name="theme-color" content="#0C2B1C">
+<meta name="color-scheme" content="dark">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<meta name="apple-mobile-web-app-title" content="Revoleá el palo">
+<link rel="manifest" href="./manifest.webmanifest">
+<link rel="apple-touch-icon" href="./miguelon/sdga-logo.svg">
+<link rel="preload" as="image" href="./miguelon/palo.svg">
+<link rel="preload" as="image" href="./miguelon/p_01_reposo.svg">
+<link rel="preload" as="image" href="./miguelon/p_09_carga.svg">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Anton&family=Archivo:wght@400;600;700&display=swap">
+<style>
+:root{--font-display:Anton,Impact,sans-serif;--font-body:Archivo,system-ui,sans-serif;--s:1}
+*{box-sizing:border-box}
+html,body{margin:0;height:100%;background:#0C2B1C;overscroll-behavior:none;
+  -webkit-text-size-adjust:100%;text-size-adjust:100%}
+body{font-family:var(--font-body);color:#F4EEDA;overflow:hidden;
+  touch-action:none;-webkit-tap-highlight-color:transparent;-webkit-touch-callout:none;
+  user-select:none;-webkit-user-select:none}
+/* El escenario mantiene el diseño original de 372x808 y se escala a la pantalla:
+   así todas las coordenadas absolutas del HUD siguen valiendo, sin distorsión. */
+#wrap{position:fixed;inset:0;display:grid;place-items:center}
+#stage{position:relative;width:372px;height:808px;overflow:hidden;background:#1C5638;
+  transform:scale(var(--s));transform-origin:center;contain:layout paint}
+.screen{position:absolute;inset:0}
+.hide{display:none!important}
+.btn{-webkit-appearance:none;appearance:none;border:0;cursor:pointer;background:#E8C34A;
+  color:#14402A;font-family:var(--font-display);text-transform:uppercase;letter-spacing:.06em;
+  border-radius:12px;box-shadow:0 4px 0 rgba(12,43,28,.45);font-size:19px;padding:13px 30px}
+.btn:active{transform:translateY(2px);box-shadow:0 2px 0 rgba(12,43,28,.45)}
+.btn.ghost{background:transparent;color:#F4EEDA;border:2px solid rgba(244,238,218,.4);
+  box-shadow:none;font-size:15px;padding:9px 20px}
+.btn.ghost:active{transform:translateY(1px)}
+.btn:focus-visible{outline:3px solid #F4EEDA;outline-offset:2px}
+/* Colas de cómic. En el .dc.html las dibuja el runtime vía style-after; el shell
+   las repone como ::after de verdad. Triángulo asimétrico = look de historieta. */
+#bubble::after{content:'';position:absolute;right:22px;bottom:-11px;width:0;height:0;
+  border-left:6px solid transparent;border-right:16px solid transparent;border-top:13px solid #F4EEDA}
+#rGrito::after{content:'';position:absolute;left:14px;bottom:-13px;width:0;height:0;
+  border-right:16px solid transparent;border-top:15px solid #F4EEDA}
+@keyframes gritoPop{0%{transform:scale(.4) rotate(-8deg);opacity:0}18%{transform:scale(1.15) rotate(3deg);opacity:1}30%{transform:scale(1) rotate(-2deg)}80%{transform:scale(1) rotate(-2deg);opacity:1}100%{transform:scale(1.05) translateY(-14px);opacity:0}}
+@keyframes camina{to{background-position:-384px 0}}
+@keyframes carroBache{0%{transform:translateY(0)}50%{transform:translateY(-1px)}}
+@keyframes paseo{0%{transform:translateX(-5px)}100%{transform:translateX(5px)}}
+@keyframes pasto{to{background-position:-16px 0}}
+@keyframes logoIn{0%{transform:translateY(-26px) rotate(-4deg);opacity:0}60%{transform:translateY(3px) rotate(1.5deg)}100%{transform:translateY(0) rotate(0);opacity:1}}
+@keyframes logoSway{0%,100%{transform:rotate(-1.3deg)}50%{transform:rotate(1.3deg)}}
+@keyframes bandWipe{0%{transform:scaleX(0)}100%{transform:scaleX(1)}}
+@keyframes titleIn{0%{transform:translateY(14px);opacity:0}100%{transform:translateY(0);opacity:1}}
+@keyframes loadWipe{0%{clip-path:inset(0 100% 0 0)}100%{clip-path:inset(0 0 0 0)}}
+@keyframes loadBar{0%{transform:scaleX(0)}100%{transform:scaleX(1)}}
+@keyframes loadBlink{0%,100%{opacity:.35}50%{opacity:1}}
+@keyframes bubbleIn{0%{transform:translateY(6px) scale(.7);opacity:0}70%{transform:translateY(-2px) scale(1.05)}100%{transform:translateY(0) scale(1);opacity:1}}
+@keyframes bubbleBob{0%,100%{transform:translateY(0) rotate(-1deg)}50%{transform:translateY(-4px) rotate(1deg)}}
+@keyframes letterPop{0%{transform:translateY(-30px) scale(.6) rotate(-12deg);opacity:0}55%{transform:translateY(4px) scale(1.08) rotate(4deg)}100%{transform:translateY(0) scale(1) rotate(0);opacity:1}}
+@keyframes letterAlive{0%,100%{transform:translateY(0) rotate(-2.5deg) scale(1)}30%{transform:translateY(-4px) rotate(2deg) scale(1.03)}60%{transform:translateY(1px) rotate(-1deg) scale(.99)}}
+@keyframes floatUp{0%{transform:translateY(0);opacity:0}15%{opacity:1}100%{transform:translateY(-40px);opacity:0}}
+@keyframes sheetUp{from{transform:translateY(40px);opacity:0}to{transform:translateY(0);opacity:1}}
+@keyframes sheetDown{from{transform:translateY(-18px);opacity:0}to{transform:translateY(0);opacity:1}}
+@keyframes idleBob{0%,100%{transform:translateY(0)}50%{transform:translateY(-6px)}}
+@media (prefers-reduced-motion:reduce){*,*::before,*::after{
+  animation-duration:.01ms!important;animation-iteration-count:1!important}}
+</style>
+</head>
+<body>
+<div id="wrap"><div id="stage">
+
+  <!-- ── quién sos ──────────────────────────────────────────── -->
+  <div class="screen hide" id="scr-quien" style="display:flex;flex-direction:column;align-items:center;padding:calc(70px + env(safe-area-inset-top)) 26px calc(24px + env(safe-area-inset-bottom));gap:14px;background:linear-gradient(180deg,#14402A 0%,#1C5638 60%,#0C2B1C 100%);overflow:auto">
+    <div style="font:600 10px/1 var(--font-body);letter-spacing:.24em;color:#6FAE87;text-transform:uppercase">Elegí tu jugador</div>
+    <h1 style="margin:0;font-family:var(--font-display);font-size:40px;font-weight:400;line-height:.9;color:#F4EEDA;text-transform:uppercase;text-align:center;padding:6px 0">¿Quién sos?</h1>
+    <div id="playerList" style="display:flex;flex-direction:column;gap:7px;width:100%"></div>
+    <button class="btn ghost" id="btnNuevo" style="margin-top:auto">Nuevo jugador</button>
+  </div>
+
+  <!-- ── jugador nuevo ──────────────────────────────────────── -->
+  <div class="screen hide" id="scr-nuevo" style="display:flex;flex-direction:column;align-items:center;padding:calc(70px + env(safe-area-inset-top)) 26px calc(24px + env(safe-area-inset-bottom));gap:12px;background:linear-gradient(180deg,#14402A 0%,#1C5638 60%,#0C2B1C 100%);overflow:auto">
+    <div style="font:600 10px/1 var(--font-body);letter-spacing:.24em;color:#6FAE87;text-transform:uppercase">Jugador nuevo</div>
+    <h1 style="margin:0;font-family:var(--font-display);font-size:40px;font-weight:400;line-height:.9;color:#F4EEDA;text-transform:uppercase;text-align:center;padding:6px 0">¿Cómo te<br>llamás?</h1>
+    <input id="inpNombre" maxlength="14" placeholder="Tu nombre" autocomplete="off" autocapitalize="words" aria-label="Tu nombre"
+      style="width:100%;background:#F4EEDA;color:#14402A;border:0;border-radius:12px;padding:13px 14px;font-family:var(--font-display);font-size:22px;text-transform:uppercase;text-align:center;outline:none;touch-action:auto;user-select:text;-webkit-user-select:text">
+    <div style="font:600 9px/1 var(--font-body);letter-spacing:.2em;color:#6FAE87;text-transform:uppercase;margin-top:4px">Elegí tu cara</div>
+    <div id="emojiGrid" style="display:flex;flex-wrap:wrap;justify-content:center;gap:8px"></div>
+    <div style="margin-top:auto;display:flex;flex-direction:column;gap:9px;align-items:center">
+      <button class="btn" id="btnCrear">Entrar</button>
+      <button class="btn ghost hide" id="btnVolver">Volver</button>
+    </div>
+  </div>
+
+  <!-- ── título ─────────────────────────────────────────────── -->
+  <div class="screen" id="scr-title" style="display:flex;flex-direction:column;align-items:center;padding:calc(70px + env(safe-area-inset-top)) 26px 30px;background:linear-gradient(180deg,#14402A 0%,#1C5638 58%,#0C2B1C 100%)">
+    <div style="display:flex;align-items:flex-end;gap:7px;height:52px">
+      <img src="miguelon/letter-s.svg" style="height:52px;width:auto;transform-origin:50% 100%;animation:letterPop .5s cubic-bezier(.2,.9,.3,1.4) .05s both,letterAlive 3.2s ease-in-out .9s infinite" alt="S">
+      <img src="miguelon/letter-d.svg" style="height:50px;width:auto;transform-origin:50% 100%;animation:letterPop .5s cubic-bezier(.2,.9,.3,1.4) .17s both,letterAlive 3.6s ease-in-out 1.25s infinite" alt="D">
+      <img src="miguelon/letter-g.svg" style="height:51px;width:auto;transform-origin:50% 100%;animation:letterPop .5s cubic-bezier(.2,.9,.3,1.4) .29s both,letterAlive 3.9s ease-in-out .7s infinite" alt="G">
+      <img src="miguelon/letter-a.svg" style="height:50px;width:auto;transform-origin:50% 100%;animation:letterPop .5s cubic-bezier(.2,.9,.3,1.4) .41s both,letterAlive 3.4s ease-in-out 1.5s infinite" alt="A">
+    </div>
+    <!-- Sin overflow:hidden y con padding vertical: line-height .86 deja cajas más
+         chicas que la tinta de Anton, y tanto el overflow como el clip-path del
+         barrido (que recorta al border-box exacto) se comían el acento de la Ú. -->
+    <div style="margin-top:0">
+      <h1 style="margin:0;font-family:var(--font-display);font-size:60px;font-weight:400;line-height:.86;color:#F4EEDA;text-transform:uppercase;text-align:center;padding:24px 12px;animation:loadWipe .9s steps(16) .3s both">El último<br>revoleo</h1>
+    </div>
+    <div style="position:relative;height:7px;width:152px;margin-top:8px;background:rgba(244,238,218,.18);border-radius:3px;overflow:hidden">
+      <div style="position:absolute;inset:0;background:#E8C34A;transform-origin:left;animation:loadBar 1.1s ease-out .3s both"></div>
+    </div>
+    <div style="font:600 8px/1 var(--font-body);letter-spacing:.3em;color:#6FAE87;text-transform:uppercase;margin-top:7px;animation:loadBlink 1s ease-in-out infinite">Cargando bronca…</div>
+    <!-- Ancla relativa: la burbuja va pegada a Miguelón (a quien le habla), no a un
+         top absoluto que se desfasa si el flujo de arriba cambia de altura. -->
+    <div style="position:relative;margin-top:auto">
+      <div id="bubble" style="position:absolute;right:-14px;top:-56px;width:148px;background:#F4EEDA;color:#0C2B1C;font-family:var(--font-display);font-size:14px;line-height:1.12;letter-spacing:.01em;padding:8px 11px 9px;border-radius:14px;box-shadow:0 3px 0 rgba(12,43,28,.35);text-align:center;z-index:1;animation:bubbleIn .5s cubic-bezier(.2,.9,.3,1.4) 1.4s both,bubbleBob 3.4s ease-in-out 1.9s infinite">Qué lindo día para jugar al golf…</div>
+    <div style="position:relative;width:311px;height:171px;overflow:hidden">
+      <div style="position:absolute;bottom:0;left:0;width:100%;height:3px;background:repeating-linear-gradient(90deg,rgba(244,238,218,.22) 0 7px,transparent 7px 16px);animation:pasto 1.1s linear infinite"></div>
+      <div style="position:absolute;bottom:3px;left:50%;margin-left:-104px;width:196px;height:144px;animation:paseo 2.2s ease-in-out infinite alternate">
+        <img src="miguelon/carro.svg" style="position:absolute;left:22px;bottom:0;width:102px;height:90px;image-rendering:pixelated;animation:carroBache .56s steps(2) infinite" alt="">
+        <div style="position:absolute;right:0;bottom:0;width:96px;height:144px;background:url(miguelon/caminata.svg) 0 0/384px 144px no-repeat;image-rendering:pixelated;animation:camina .56s steps(4) infinite"></div>
+      </div>
+    </div>
+    </div>
+    <div style="font-family:var(--font-display);font-size:46px;line-height:.9;color:#E8C34A;text-transform:uppercase;text-align:center;margin-top:6px">Miguelón</div>
+    <div style="font:400 12px/1.5 var(--font-body);color:rgba(244,238,218,.78);text-align:center;max-width:264px;margin-top:6px">Camisa hawaiana, paciencia cero. Tres tiros: encadená trucos y clavala en el green.</div>
+    <div id="recordLine" class="hide" style="background:#E8C34A;color:#14402A;font-family:var(--font-display);font-size:13px;letter-spacing:.08em;padding:3px 11px;text-transform:uppercase;margin-top:10px"></div>
+    <button id="btnQuien" style="display:flex;align-items:center;gap:8px;background:rgba(12,43,28,.5);border:1px solid rgba(244,238,218,.25);border-radius:999px;padding:7px 14px;margin-top:8px;cursor:pointer;color:#F4EEDA;font-family:var(--font-display);font-size:13px;line-height:1;text-transform:uppercase">
+      <span id="quienSoy"></span>
+      <span style="font:600 9px/1 var(--font-body);letter-spacing:.14em;color:#6FAE87">Cambiar</span>
+    </button>
+    <div style="margin-top:auto;padding-bottom:env(safe-area-inset-bottom)"><button class="btn" id="btnStart">Comenzar</button></div>
+  </div>
+
+  <!-- ── juego ──────────────────────────────────────────────── -->
+  <div class="screen hide" id="scr-play" style="touch-action:none">
+    <canvas id="cv" aria-hidden="true" style="position:absolute;inset:0;width:100%;height:100%;display:block;image-rendering:pixelated;touch-action:none"></canvas>
+    <div style="position:absolute;top:calc(24px + env(safe-area-inset-top));left:14px;right:14px;display:flex;justify-content:space-between;align-items:flex-start;pointer-events:none">
+      <div style="background:rgba(12,43,28,.72);border-radius:12px;padding:7px 11px;display:flex;flex-direction:column;gap:3px">
+        <div style="font:600 8px/1 var(--font-body);letter-spacing:.18em;color:#6FAE87;text-transform:uppercase">Tiro</div>
+        <div id="rShot" style="font-family:var(--font-display);font-size:19px;line-height:1;color:#F4EEDA">1/3</div>
+      </div>
+      <div style="background:rgba(12,43,28,.72);border-radius:12px;padding:7px 11px;display:flex;flex-direction:column;gap:3px;align-items:flex-end">
+        <div style="font:600 8px/1 var(--font-body);letter-spacing:.18em;color:#6FAE87;text-transform:uppercase">Viento</div>
+        <div id="rWind" style="font-family:var(--font-display);font-size:19px;line-height:1;color:#E8C34A">→ 0</div>
+      </div>
+    </div>
+    <div style="position:absolute;top:170px;right:12px;display:flex;flex-direction:column;align-items:flex-end;gap:6px;pointer-events:none">
+      <div id="rMetros" style="font-family:var(--font-display);font-size:44px;line-height:1.05;color:#F4EEDA;background:rgba(12,43,28,.82);border-radius:14px;padding:6px 14px 8px;opacity:0">0 M</div>
+      <div id="rBest" style="font:600 9px/1 var(--font-body);letter-spacing:.16em;color:rgba(244,238,218,.85);text-transform:uppercase;background:rgba(12,43,28,.82);border-radius:9px;padding:5px 9px">Total 0 pts</div>
+      <div id="rMult" style="font-family:var(--font-display);font-size:20px;line-height:1;color:#E8C34A;background:rgba(12,43,28,.86);border-radius:11px;padding:5px 11px;opacity:0">+0 ×1.0</div>
+      <div id="rTricks" style="font:600 8px/1.4 var(--font-body);letter-spacing:.12em;color:#F4EEDA;text-transform:uppercase;background:rgba(12,43,28,.86);border-radius:9px;padding:5px 9px;max-width:150px;text-align:right;opacity:0"></div>
+    </div>
+    <div id="rGrito" style="position:absolute;left:22px;top:404px;max-width:196px;background:#F4EEDA;color:#0C2B1C;font-family:var(--font-display);font-size:19px;line-height:1.08;padding:10px 14px 11px;border-radius:16px 16px 16px 4px;box-shadow:0 4px 0 rgba(12,43,28,.35);opacity:0;pointer-events:none;transform-origin:8% 100%"></div>
+    <div id="rFloat" style="position:absolute;top:300px;left:50%;transform:translateX(-50%);color:#E8C34A;font-family:var(--font-display);font-size:22px;opacity:0;pointer-events:none;text-shadow:0 2px 0 #0C2B1C"></div>
+    <div id="hintBox" style="position:absolute;left:22px;right:22px;bottom:calc(30px + env(safe-area-inset-bottom));pointer-events:none;display:flex;justify-content:center">
+      <div id="rHint" style="font-family:var(--font-display);font-size:22px;line-height:1.1;letter-spacing:.04em;color:#F4EEDA;text-transform:uppercase;text-align:center;text-shadow:0 2px 0 rgba(12,43,28,.85)">Mantené apretado · soltá para revolear</div>
+    </div>
+    <div id="resSheet" class="hide">
+      <div style="position:absolute;top:112px;left:0;right:0;display:flex;justify-content:center;pointer-events:none;animation:sheetDown .26s cubic-bezier(.2,.9,.3,1.2) both">
+        <div style="display:flex;flex-direction:column;align-items:center;gap:2px;background:rgba(12,43,28,.88);border-radius:18px;padding:14px 22px 16px;box-shadow:0 10px 26px rgba(6,26,17,.35)">
+          <div id="resKicker" style="font:600 9px/1 var(--font-body);letter-spacing:.2em;color:rgba(244,238,218,.75);text-transform:uppercase"></div>
+          <div id="resMeters" style="font-family:var(--font-display);font-size:64px;line-height:1.1;color:#F4EEDA;text-shadow:0 3px 0 #0C2B1C;margin:6px 0 4px"></div>
+          <div id="resTag" style="font-family:var(--font-display);font-size:17px;line-height:1;color:#E8C34A;text-align:center;text-shadow:0 2px 0 rgba(12,43,28,.8)"></div>
+          <div id="resNote" style="font:400 10px/1.35 var(--font-body);color:rgba(244,238,218,.72);text-align:center;max-width:230px;margin-top:4px"></div>
+          <div id="resPts" style="margin-top:8px;background:#E8C34A;color:#14402A;font-family:var(--font-display);font-size:13px;letter-spacing:.05em;padding:4px 12px;text-transform:uppercase"></div>
+        </div>
+      </div>
+      <div style="position:absolute;left:0;right:0;bottom:calc(24px + env(safe-area-inset-bottom));display:flex;justify-content:center;animation:sheetUp .28s cubic-bezier(.2,.9,.3,1.2) both">
+        <button class="btn" id="btnNext">Siguiente tiro</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- ── ranking ────────────────────────────────────────────── -->
+  <div class="screen hide" id="scr-rank" style="display:flex;flex-direction:column;padding:calc(40px + env(safe-area-inset-top)) 18px calc(20px + env(safe-area-inset-bottom));gap:12px;background:linear-gradient(180deg,#14402A 0%,#1C5638 60%,#0C2B1C 100%);overflow:auto">
+    <div style="text-align:center">
+      <div style="font:600 10px/1 var(--font-body);letter-spacing:.24em;color:#6FAE87;text-transform:uppercase">Ranking histórico</div>
+      <div style="font-family:var(--font-display);font-size:28px;line-height:1;color:#F4EEDA;text-transform:uppercase;margin-top:6px">El último revoleo</div>
+      <div id="rankVerdict" style="display:inline-block;background:#E8C34A;color:#14402A;font-family:var(--font-display);font-size:13px;letter-spacing:.08em;padding:3px 10px;margin-top:8px;text-transform:uppercase"></div>
+      <div id="totalPts" style="font:600 11px/1.4 var(--font-body);letter-spacing:.14em;color:#F4EEDA;text-transform:uppercase;margin-top:8px"></div>
+    </div>
+    <div id="rankList" style="display:flex;flex-direction:column;gap:5px"></div>
+    <div style="margin-top:auto;display:flex;flex-direction:column;gap:9px;align-items:center;padding-top:14px">
+      <button class="btn" id="btnAgain">Otra ronda</button>
+      <button class="btn ghost" id="btnTitle">Volver al inicio</button>
+    </div>
+  </div>
+
+</div></div>
+
+<script>
+// ── shim: reemplaza al runtime de Claude Design (React + DCLogic) por DOM plano.
+// El motor de abajo queda tal cual está en el .dc.html.
+const $ = id => document.getElementById(id);
+const React = { createRef: () => ({ current: null }) };
+let HOST = null;
+class DCLogic {
+  constructor(){ this.props = {}; this.state = {}; }
+  setState(u, cb){
+    Object.assign(this.state, typeof u === 'function' ? u(this.state) : u);
+    if (HOST) HOST.paint();                         // refs vivos antes de didUpdate/cb
+    if (this.componentDidUpdate) this.componentDidUpdate({});
+    if (cb) cb();
+  }
+  forceUpdate(){ if (HOST) HOST.paint(); }
+  componentDidMount(){} componentDidUpdate(){} componentWillUnmount(){}
+  renderVals(){ return {}; }
+}
+
+/* === MOTOR EXTRAÍDO DE "Revolea el Palo.dc.html" — NO EDITAR ACÁ === */
+const W=134,H=291,GY=232,TEE=26,PXM=3,G=0.117,MW=32,MH=48;
+const GRIP={p_01_reposo:[25,29,1.12],p_02_preparacion:[23,29,1.06],p_03_inicio_swing:[7,16,-2.26],p_04_swing_horizontal:[22,25,.05],p_05_follow_through:[23,14,-.84],p_06_giro_sobre_cabeza:[20,10,-.15]};
+const HELPER_ART={
+aguila:{w:12,h:8,p:{b:'#6B4A22',w:'#F4EEDA',y:'#E8C34A',k:'#14402A'},r:['.bb......bb.','bbbb.ww.bbbb','bbbbbwwwbbbb','.bbbwkwkwbb.','...bbwwwbb..','.....yy.....','....bbbb....','...b....b...']},
+ninja:{w:10,h:12,p:{k:'#14402A',e:'#F4EEDA',r:'#BC4B3C'},r:['..kkkkkk..','.kkkkkkkk.','.kkkkkkkk.','.eeeeeeee.','.kkkkkkkk.','r.kkkkkk..','rrkkkkkkk.','.kkkkkkkk.','kkkkkkkkkk','..kk..kk..','..kk..kk..','.kk....kk.']},
+paquete:{w:11,h:10,p:{b:'#A9743C',d:'#7A5227',y:'#E8C34A'},r:['bbbbbbbbbbb','bbbbbyybbbb','bbbbbyybbbb','ddddddddddd','bbbbbyybbbb','bbbbbyybbbb','bbbbbyybbbb','bbbbbyybbbb','bbbbbyybbbb','ddddddddddd']}};
+const FAUNA_ART={
+pelicano:{w:14,h:9,p:{w:'#F4EEDA',g:'#C9C2A8',y:'#E8C34A',k:'#14402A'},r:['..............','.ww........ww.','wwwww....wwwww','.gggwwwwwwggg.','....wwwwwwww..','...wwwkww.....','...wwyyyyy....','....ww........','..............']},
+nutria:{w:14,h:8,p:{b:'#7A5227',d:'#5A3B1B',w:'#F4EEDA',k:'#14402A'},r:['..bb..........','.bbbb.........','bbkbbbbbb.....','bwbbbbbbbbb...','.bbbbbbbbbbbd.','.bbbbbbbbbbddd','..dd...dd..d..','..............']},
+zorro:{w:16,h:11,p:{o:'#C8722F',d:'#8E4A18',w:'#F4EEDA',k:'#14402A'},r:['.o...o..........','.oo.oo..........','.ooooo.ooooo....','.okoko.oooooo...','..owo.oooooooo..','......oooooooodd','.....oooooooddd.','.....o.o.o.o....','....o..o.o..o...','....o..o.o..o...','................']}};const HELPER_KEYS=['aguila','ninja','paquete'];
+const POSES=['p_01_reposo','p_02_preparacion','p_03_inicio_swing','p_04_swing_horizontal','p_05_follow_through','p_06_giro_sobre_cabeza','p_07_lanzamiento','p_08_festejo','p_09_carga'];
+const INSULTS={
+"Sin filtro":["¡LA PUTA MADRE!","¡LA CONCHA DE LA LORA!","¡ANDÁ A LA MIERDA!","¡ME CAGO EN TODO!","¡LA PUTA QUE TE PARIÓ!","¡QUÉ MIERDA HICE!","¡SOY UN PELOTUDO!","¡AL CARAJO EL PALO!","¡LA RECONCHA!","¡ME CAGO EN EL GOLF!"],
+"Censurado":["¡LA P*TA MADRE!","¡LA C*NCHA DE LA LORA!","¡ANDÁ A LA M*ERDA!","¡ME C*GO EN TODO!","¡LA P*TA QUE TE PARIÓ!","¡QUÉ M*ERDA HICE!","¡SOY UN PELOT*DO!","¡AL C*RAJO EL PALO!"],
+"Eufemismo":["¡ANDÁ A CAGAR, PAR 3!","¡MI ABUELA PEGA MEJOR!","¡ESTE PALO ESTÁ FALLADO!","¡ME VUELVO AL ASADO!","¡EL CAMPO ESTÁ TORCIDO!","¡BASTA DE GOLF!","¡QUE SE LO LLEVE EL VIENTO!"]};
+const SDGA_EMOJI=["🗿","🦉","🦅","💩","🇮🇪","🥃","🐕","📺"];
+const RECORDS=[["🗿","El Moai",13480],["🦉","El Búho",11720],["🦅","El Águila",10240],["🥃","Whisky",8930],["🐕","Gonza",7460],["💩","El Bosta",5980],["🇮🇪","Irlandés",4310],["📺","La Tele",2150]];
+const AVATARS=["🗿","🦉","🦅","💩","🇮🇪","🥃","🐕","📺","⛳","🏌️","🍖","🧉","🐊","👑","🔥","🤬"];
+const DB_KEY='sdga-palo-v4';
+// Base de jugadores y puntajes. ponytail: localStorage — una fila pesa ~60 bytes
+// contra un cupo de ~5 MB, así que el techo real no es el tamaño sino que es POR
+// DISPOSITIVO: no hay ranking compartido entre celulares. Si hace falta eso, se
+// reemplazan estas 4 funciones por fetch a un backend; la forma de los datos no cambia.
+const DB={
+  read(){try{const d=JSON.parse(localStorage.getItem(DB_KEY));if(d&&d.players&&d.scores)return d}catch(e){}
+    return {players:[],scores:[]}},
+  write(d){try{localStorage.setItem(DB_KEY,JSON.stringify(d))}catch(e){}},
+  add(name,emoji){const d=this.read();
+    const p={id:'p'+Date.now().toString(36)+((Math.random()*46656)|0).toString(36),
+      name:String(name||'').trim().slice(0,14)||'Anónimo',emoji:emoji||AVATARS[0],
+      best:0,rondas:0,visto:Date.now()};
+    d.players.push(p);this.write(d);return p},
+  // una fila por ronda terminada: de acá salen los puntajes históricos
+  save(id,pts,metros){const d=this.read(),p=d.players.find(x=>x.id===id);if(!p)return null;
+    if(pts>p.best)p.best=pts;
+    p.rondas=(p.rondas||0)+1;p.visto=Date.now();
+    d.scores.push({p:id,pts:pts,m:metros,at:Date.now()});
+    if(d.scores.length>500)d.scores.splice(0,d.scores.length-500);
+    this.write(d);return p},
+  history(id){return this.read().scores.filter(s=>!id||s.p===id).sort((a,b)=>b.at-a.at)},
+};
+const rnd=(a,b)=>a+Math.random()*(b-a);
+const clamp=(v,a,b)=>v<a?a:v>b?b:v;
+// Reloj del juego: la lógica corre a 60 Hz fijos, independiente del refresco de
+// la pantalla. MAXSTEPS acota el catch-up (sin eso, un hipo de 500 ms pide 30
+// pasos de golpe y se genera la espiral de la muerte) y MAXDT descarta el hueco
+// que deja una pestaña en segundo plano en lugar de intentar recuperarlo.
+const STEP=1000/60,MAXSTEPS=4,MAXDT=250;
+// Velocidad del vuelo: cuántos pasos de física entran en cada paso de lógica.
+// 0.34 era el slomo original (≈20 pasos de física por segundo) y el palo parecía
+// flotar; 0.55 son ≈33/s. La trayectoria y las distancias no cambian —— es la
+// misma simulación reproducida más rápido. Subilo hacia 1 para ir a 60/s.
+const VUELO=0.55;
+
+class Component extends DCLogic{
+  // arranca en el selector: 'quien' si ya hay jugadores guardados, 'nuevo' la primera vez
+  state={screen:DB.read().players.length?'quien':'nuevo',player:null,nombre:'',emoji:AVATARS[0],
+    shot:1,best:0,record:0,points:0,bails:0,showRes:false,res:null};
+  acc=0;lastT=0;lastTick=0;raf=0;wd=0;
+  cv=React.createRef();rShot=React.createRef();rWind=React.createRef();rMetros=React.createRef();
+  rBest=React.createRef();rGrito=React.createRef();rFloat=React.createRef();rHint=React.createRef();rMult=React.createRef();rTricks=React.createRef();
+
+  componentDidMount(){
+    this.imgs={};this.red={};
+    POSES.forEach(n=>{const i=new Image();i.decoding='async';i.src='miguelon/'+n+'.svg';this.imgs[n]=i});
+    this.g={phase:'ready',t0:0,power:0,angle:45,manual:false,club:null,obs:[],bunkers:[],wind:0,mult:1,cam:0,rageT:0,fx:[],dust:[],helpers:[],ball:null};
+    this.mkClubSprite();
+    // Un tick = 0..MAXSTEPS pasos de lógica de 16.67 ms + un solo dibujo. Antes
+    // era un step() por frame de rAF, así que el juego iba al doble de velocidad
+    // en pantallas de 120 Hz y se arrastraba en cuanto el frame se pasaba de 16 ms.
+    this.tick=now=>{
+      const n=now||performance.now();
+      if(!this.lastT)this.lastT=n-STEP;
+      let dt=n-this.lastT;this.lastT=n;
+      if(dt>MAXDT)dt=STEP;
+      this.acc+=dt;
+      let steps=0;
+      while(this.acc>=STEP&&steps<MAXSTEPS){this.acc-=STEP;steps++;
+        try{this.step()}catch(e){window.__loopErr=String((e&&e.stack)||e)}}
+      if(steps>=MAXSTEPS)this.acc=0;
+      if(steps){try{this.draw()}catch(e){window.__loopErr=String((e&&e.stack)||e)}}
+      this.lastTick=n;
+    };
+    this.loop=t=>{this.raf=requestAnimationFrame(this.loop);this.tick(t)};
+    // Pestaña oculta: se corta el audio, no el loop. El navegador ya frena rAF
+    // solo, y el loop NO se puede atar a document.hidden: la preview del editor
+    // renderiza en un documento oculto y el juego no arrancaría nunca (para eso
+    // está el watchdog de runLoop).
+    this.onVis=()=>{
+      if(document.hidden){this.heliOff();this.stopMusic();
+        try{this._ac&&this._ac.suspend()}catch(e){}}
+      else{try{this._ac&&this._ac.resume()}catch(e){}}};
+    document.addEventListener('visibilitychange',this.onVis);
+    // Sólo mientras se juega: si no, el preventDefault del espacio impide escribir
+    // el nombre en el alta de jugador y las flechas mueven el ángulo desde los menús.
+    this.jugando=()=>this.state.screen==='play';
+    this.kd=e=>{if(!this.jugando())return;
+      if(e.code==='Space'&&!e.repeat){e.preventDefault();this.begin()}
+      if(e.code==='ArrowUp'){this.g.manual=true;this.g.angle=clamp(this.g.angle+4,15,70)}
+      if(e.code==='ArrowDown'){this.g.manual=true;this.g.angle=clamp(this.g.angle-4,15,70)}};
+    this.ku=e=>{if(!this.jugando())return;if(e.code==='Space'){e.preventDefault();this.fire()}};
+    window.addEventListener('keydown',this.kd);window.addEventListener('keyup',this.ku);
+    this.firstTap=()=>{window.removeEventListener('pointerdown',this.firstTap);
+      try{if(this._ac&&this._ac.state==='suspended')this._ac.resume()}catch(e){}
+      if(this.state.screen==='title')this.startMusic();};
+    window.addEventListener('pointerdown',this.firstTap);
+    this.runLoop(this.state.screen==='play');
+  }
+  componentDidUpdate(){this.runLoop(this.state.screen==='play')}
+  componentWillUnmount(){this.runLoop(false);this.stopMusic();this.heliOff();
+    clearInterval(this._fadeIv);
+    document.removeEventListener('visibilitychange',this.onVis);
+    window.removeEventListener('keydown',this.kd);window.removeEventListener('keyup',this.ku);window.removeEventListener('pointerdown',this.firstTap)}
+
+  // El loop sólo vive mientras se juega: en título y ranking no hay canvas que
+  // dibujar, así que rAF + watchdog quedaban girando al vacío.
+  runLoop(on){
+    if(on){
+      if(this.raf)return;
+      this.lastT=0;this.acc=0;
+      this.raf=requestAnimationFrame(this.loop);
+      // La preview puede quedar en un iframe donde rAF se frena. El watchdog
+      // reanima la lógica; con paso fijo ya no puede duplicar pasos.
+      if(!this.wd)this.wd=setInterval(()=>{const n=performance.now();
+        if(n-(this.lastTick||0)>150)this.tick(n)},50);
+    }else{
+      if(this.raf){cancelAnimationFrame(this.raf);this.raf=0}
+      if(this.wd){clearInterval(this.wd);this.wd=0}
+    }
+  }
+  // Escribe en el DOM sólo si el valor cambió: antes metros/total/tiro/pista se
+  // reasignaban en cada frame y cada textContent invalida estilo y layout.
+  txt(ref,s){const el=ref&&ref.current;if(!el||el.__v===s)return;el.__v=s;el.textContent=s}
+  op(ref,v){const el=ref&&ref.current;if(!el||el.__o===v)return;el.__o=v;el.style.opacity=v}
+
+  mkClubSprite(){const i=new Image();i.decoding='async';
+    // Pasar el SVG a bitmap una sola vez: drawClub lo dibuja hasta 7 veces por
+    // frame (estela + fantasmas) y rasterizar un SVG rotado en cada llamada es
+    // lo más caro del dibujo, sobre todo en Safari/iOS.
+    i.onload=()=>{const c=document.createElement('canvas');
+      c.width=i.naturalWidth||26;c.height=i.naturalHeight||13;
+      const x=c.getContext('2d');x.imageSmoothingEnabled=false;x.drawImage(i,0,0);
+      this.clubBaked=c;};
+    i.src='miguelon/palo.svg';this.clubSprite=i;}
+  // dibuja el palo (asset aparte) rotado sobre un pivote
+  drawClub(px,py,rot,fromHead){const s=this.clubBaked;if(!s)return;
+    const ctx=this.ctx;ctx.save();ctx.translate(Math.round(px),Math.round(py));ctx.rotate(rot);
+    ctx.drawImage(s,fromHead?-20:-3,-6);ctx.restore();}
+  pose(n,red){
+    const img=this.imgs[n];
+    if(!red)return img;
+    if(this.red[n])return this.red[n];
+    if(!img||!img.complete||!img.naturalWidth)return img;
+    const c=document.createElement('canvas');c.width=64;c.height=96;const x=c.getContext('2d');
+    x.drawImage(img,0,0,64,96);x.globalCompositeOperation='source-atop';
+    x.fillStyle='rgba(188,75,60,.5)';x.fillRect(0,0,64,96);
+    this.red[n]=c;return c;
+  }
+  // Un SVG que no cargó (red móvil floja) deja el <img> en estado "broken" y
+  // drawImage tira InvalidStateError, que abortaba draw() a mitad de frame y
+  // dejaba media escena sin pintar. Los canvas bakeados no tienen naturalWidth.
+  drawMig(n,x,y,red,sx,sy,cr){const s=this.pose(n,red);
+    if(!s||(s.naturalWidth!==undefined&&!s.naturalWidth))return;
+    const w=MW+(sx||0),h=MH+(sy||0);
+    const ox=Math.round(x-(w-MW)/2),oy=Math.round(y+MH-h);
+    this.ctx.drawImage(s,ox,oy,w,h);
+    const gp=GRIP[n];if(gp&&cr!==false)this.drawClub(ox+gp[0]*(w/MW),oy+gp[1]*(h/MH),cr===undefined?gp[2]:cr);}
+  insults(){return INSULTS[this.props.censura]||INSULTS["Sin filtro"]}
+  shots(){return this.props.tiros||3}
+  now(){return performance.now()}
+
+  audio(){if(this._ac)return this._ac;
+    try{const AC=window.AudioContext||window.webkitAudioContext;this._ac=new AC();
+      this._mg=this._ac.createGain();this._mg.gain.value=0.28;this._mg.connect(this._ac.destination);}catch(e){this._ac=null}
+    return this._ac;}
+  tone(freq,t0,dur,type,vol,slideTo){const ac=this.audio();if(!ac||this.props.sonido===false)return;
+    const o=ac.createOscillator(),g=ac.createGain(),st=ac.currentTime+t0;
+    o.type=type||'square';o.frequency.setValueAtTime(freq,st);
+    if(slideTo)o.frequency.exponentialRampToValueAtTime(Math.max(30,slideTo),st+dur);
+    g.gain.setValueAtTime(0.0001,st);g.gain.exponentialRampToValueAtTime(vol||0.3,st+0.008);
+    g.gain.exponentialRampToValueAtTime(0.0001,st+dur);
+    o.connect(g);g.connect(this._mg);o.start(st);o.stop(st+dur+0.02);}
+  // El buffer de ruido se rellenaba con un for de miles de Math.random() en cada
+  // sfx. Ahora se cachea por duración: hay 5 duraciones distintas en todo el juego.
+  noiseBuf(ac,dur){const k=Math.round(dur*1000);
+    this._nb=this._nb||{};const hit=this._nb[k];if(hit)return hit;
+    const n=Math.max(1,Math.floor(ac.sampleRate*dur)),buf=ac.createBuffer(1,n,ac.sampleRate),d=buf.getChannelData(0);
+    for(let i=0;i<n;i++)d[i]=(Math.random()*2-1)*(1-i/n);
+    this._nb[k]=buf;return buf}
+  noise(t0,dur,vol){const ac=this.audio();if(!ac||this.props.sonido===false)return;
+    const s=ac.createBufferSource(),g=ac.createGain(),st=ac.currentTime+t0;
+    s.buffer=this.noiseBuf(ac,dur);g.gain.value=vol||0.2;s.connect(g);g.connect(this._mg);s.start(st);}
+  arp(notes,step,type,vol){notes.forEach((f,i)=>this.tone(f,i*step,step*1.4,type||'square',vol||0.26))}
+  sfxCharge(){this.tone(180,0,0.12,'square',0.16,320)}
+  sfxLaunch(){this.arp([392,523,659,784],0.05,'square',0.3);this.noise(0,0.12,0.12)}
+  sfxFlap(){this.tone(660,0,0.09,'square',0.24,990)}
+  sfxTrick(){this.arp([523,659,784,1047],0.04,'square',0.24)}
+  sfxBail(){this.tone(300,0,0.28,'sawtooth',0.28,70);this.noise(0,0.18,0.16)}
+  sfxLand(){this.tone(440,0,0.1,'square',0.2,330);this.tone(330,0.09,0.14,'square',0.18)}
+  sfxGreen(){this.arp([659,784,988,1319],0.05,'triangle',0.26)}
+  sfxHole(){this.arp([523,659,784,1047,1319,1568],0.07,'square',0.3)}
+  sfxGrito(){this.noise(0,0.24,0.34);
+    this.tone(210,0,0.34,'sawtooth',0.3,60);
+    this.tone(233,0.015,0.3,'square',0.16,88);
+    this.tone(150,0.06,0.4,'sawtooth',0.22,48);
+    this.noise(0.12,0.14,0.18);}
+  heliOn(){const ac=this.audio();if(!ac||this.props.sonido===false||this._heli)return;
+    if(ac.state==='suspended')ac.resume();
+    const o=ac.createOscillator(),lfo=ac.createOscillator(),lg=ac.createGain(),g=ac.createGain();
+    o.type='sawtooth';o.frequency.value=56;lfo.type='square';lfo.frequency.value=11;
+    lg.gain.value=0.11;g.gain.value=0.12;lfo.connect(lg);lg.connect(g.gain);
+    o.connect(g);g.connect(this._mg);o.start();lfo.start();this._heli={o,lfo,g};}
+  heliOff(){if(this._heli){try{const t=this._ac.currentTime;this._heli.g.gain.setTargetAtTime(0,t,0.04);this._heli.o.stop(t+0.15);this._heli.lfo.stop(t+0.15);}catch(e){}this._heli=null;}}
+  sfxButton(){this.arp([523,784,1047],0.045,'square',0.32);this.tone(1319,0.14,0.1,'square',0.28)}
+  fadeMusic(ms){const a=this._introAudio,t=this._titleAudio,step=0.05,dec=step/(ms/1000);
+    const cur=(a&&!a.paused)?a:(t&&!t.paused)?t:null;if(!cur){this.stopMusic();return}
+    clearInterval(this._fadeIv);this._fadeIv=setInterval(()=>{
+      cur.volume=Math.max(0,cur.volume-dec);
+      if(cur.volume<=0.001){clearInterval(this._fadeIv);this.stopMusic();cur.volume=0.5;}
+    },50);}
+
+  startMusic(){if(this.props.sonido===false)return;
+    if(!this._introAudio){const a=new Audio('miguelon/intro-music.mp3');a.loop=false;a.volume=0.5;this._introAudio=a;
+      const t=new Audio('miguelon/title-music.mp3');t.loop=true;t.volume=0.5;this._titleAudio=t;
+      a.addEventListener('ended',()=>{if(this.state.screen==='title'&&this.props.sonido!==false){const p=t.play();if(p&&p.catch)p.catch(()=>{});}});}
+    try{const p=this._introAudio.play();if(p&&p.catch)p.catch(()=>{});}catch(e){}}
+  stopMusic(){if(this._introAudio){try{this._introAudio.pause();}catch(e){}}if(this._titleAudio){try{this._titleAudio.pause();}catch(e){}}}
+
+  newShot(intro){
+    const g=this.g;g.power=0;g.angle=45;g.manual=false;g.club=null;g.mult=1;g.cam=0;g.rageT=0;g.fx=[];g.dust=[];g.helpers=[];
+    g.wind=this.props.viento===false?0:Math.round(rnd(-14,14));
+    g.greenX=TEE+200*PXM;
+    g.greens=[];for(let gm=200;gm<=1200;gm+=200)g.greens.push(TEE+gm*PXM);
+    const obs=[];let x=430;
+    while(x<4200){if(!this.inGreen(x)){const r=Math.random();
+      if(r<.32)obs.push({t:'tree',x:x,w:26,h:46});
+      else if(r<.5)obs.push({t:'cart',x:x,w:30,h:20});
+      else if(r<.68)obs.push({t:'caddie',x:x,w:16,h:30});
+      else obs.push({t:'sdga',x:x,w:18,h:30,who:SDGA_EMOJI[(Math.random()*8)|0]});}
+      x+=rnd(210,420);}
+    g.obs=obs;
+    g.putted=false;
+    g.combo={pts:0,mult:1,items:[],bailed:false};
+    const pel=[],nut=[],zor=[];
+    for(let px2=200;px2<4200;px2+=rnd(240,460))if(!this.inGreen(px2))pel.push({x:px2,y:rnd(62,124),ph:Math.random()*6});
+    for(let nx2=300;nx2<4200;nx2+=rnd(380,700))if(!this.inGreen(nx2))nut.push({x:nx2,ph:Math.random()*6});
+    for(let zx=520;zx<4200;zx+=rnd(600,1100))if(!this.inGreen(zx))zor.push({x:zx,ph:Math.random()*6});
+    g.pel=pel;g.nut=nut;g.zor=zor;
+    this.paintCombo();
+    const bk=[];let bx=260;
+    while(bx<4200){if(Math.random()<.45&&g.greens.every(gx=>Math.abs(bx+30-gx)>200))bk.push({x:bx,w:rnd(34,62)});bx+=rnd(230,380)}
+    g.bunkers=bk;
+    this.txt(this.rWind,(g.wind<0?'← ':'→ ')+Math.abs(g.wind));
+    this.op(this.rMetros,'0');
+    this.op(this.rBest,'1');
+    if(intro){g.phase='intro';g.t0=this.now();g.ball={x:TEE+9,y:GY-2,vx:0,rolling:false,hop:0};
+      g.puttLong=Math.random()<.5;g.ballV=g.puttLong?rnd(1.25,1.45):rnd(0.58,0.72);
+      this.txt(this.rHint,'Este putt es para ganar el hoyo…');}
+    else{g.phase='ready';g.ball=null;this.setHint()}
+  }
+  setHint(){this.txt(this.rHint,'Mantené apretado · soltá para revolear')}
+  inGreen(x){return (this.g.greens||[]).some(gx=>Math.abs(x-gx)<160)}
+  // Los arrays de escenario se van llenando durante el vuelo y antes nunca se
+  // vaciaban: a los 5.000 m había cientos de items muertos que step() y draw()
+  // recorrían igual en cada frame. Están ordenados por x, así que basta cortar
+  // por adelante lo que quedó atrás de la cámara.
+  cull(a,x){if(!a||!a.length)return;let i=0;
+    while(i<a.length&&a[i].x+(a[i].w||0)<x)i++;
+    if(i)a.splice(0,i)}
+  // Compacta in situ en vez de crear un array nuevo por frame con .filter().
+  prune(a){let w=0;for(let i=0;i<a.length;i++){const f=a[i];if(--f.t>0)a[w++]=f}a.length=w}
+
+  begin(){const g=this.g;if(!g||g.phase!=='ready'||this.state.screen!=='play')return;
+    g.phase='charge';g.t0=this.now();g.manual=false;this.sfxCharge();this.heliOn();
+    this.txt(this.rHint,'Soltá en el pico y con el ángulo justo');}
+  fire(){
+    const g=this.g;if(!g||g.phase!=='charge')return;this.heliOff();
+    g.phase='swing';g.t0=this.now();g.locked=g.power;g.perfect=g.power>.9;g.relSpin=g.spin||0;
+    const ins=this.insults();this.showGrito(ins[(Math.random()*ins.length)|0]);
+  }
+  showGrito(txt){const el=this.rGrito.current;if(!el)return;this.sfxGrito();el.textContent=txt;el.style.animation='none';void el.offsetWidth;el.style.animation='gritoPop 1.9s ease-out forwards'}
+  showFloat(txt){const el=this.rFloat.current;if(!el)return;el.textContent=txt;el.style.animation='none';void el.offsetWidth;el.style.animation='floatUp 1.4s ease-out forwards'}
+
+  nearGreen(x){const gs=this.g.greens||[this.g.greenX];let best=gs[0];
+    for(const gx of gs)if(Math.abs(gx-x)<Math.abs(best-x))best=gx;return best}
+
+  trick(name,pts,mAdd){const g=this.g,cb=g.combo;if(!cb||cb.bailed)return;
+    cb.pts+=pts;cb.mult=Math.round((cb.mult+mAdd)*10)/10;
+    const prev=cb.items[cb.items.length-1];
+    if(prev&&prev.name===name)prev.n++;else cb.items.push({name:name,n:1});
+    this.sfxTrick();
+    if(cb.items.length>4)cb.items.shift();
+    this.paintCombo();}
+  bail(){const g=this.g,cb=g.combo;if(!cb||cb.bailed)return;
+    cb.bailed=true;cb.mult=Math.max(1,Math.round(cb.mult*5)/10);this.paintCombo();this.sfxBail();this.showFloat('¡SE CORTÓ EL COMBO!')}
+  paintCombo(){const cb=this.g.combo,el=this.rTricks.current,ml=this.rMult.current;if(!el||!ml)return;
+    if(!cb||!cb.items.length){this.txt(this.rTricks,'');this.op(this.rTricks,'0');this.op(this.rMult,'0');return}
+    this.op(this.rTricks,'1');this.op(this.rMult,'1');
+    this.txt(this.rTricks,cb.items.map(i=>i.name+(i.n>1?' ×'+i.n:'')).join('  ·  '));
+    this.txt(this.rMult,cb.bailed?'COMBO CORTADO':'+'+cb.pts+'  ×'+cb.mult.toFixed(1));
+    const col=cb.bailed?'#BC4B3C':'#E8C34A';if(ml.__c!==col){ml.__c=col;ml.style.color=col}}
+
+  launch(){
+    const g=this.g,a=g.angle*Math.PI/180,v=5.4+(g.locked*(g.perfect?1.12:1))*8.6;
+    g.club={x:TEE+8,y:GY-44,vx:Math.cos(a)*v,vy:-Math.sin(a)*v,rot:-a,
+      spin:Math.max(.22,.19+g.locked*.24),grounded:false,trail:[],lastFlap:this.now()+120};
+    g.phase='fly';g.flyT=0;g.mult=1;g.rageT=240;g.air=3;
+    this.txt(this.rHint,'¡Tocá la pantalla para que el palo planee!');g.fx.push({x:TEE+14,y:GY-42,t:20});g.shake=7;this.sfxLaunch();
+    if(g.perfect)this.showFloat('¡PERFECTO!');
+    this.op(this.rMetros,'1');
+  }
+  endShot(kind){
+    const g=this.g;g.phase='done';
+    const m=Math.round(Math.max(0,(g.club.x-TEE)/PXM));
+    const dx=Math.abs(g.club.x-this.nearGreen(g.club.x)),cb=g.combo;
+    let gMult=1,zona='Cayó en el rough';
+    if(kind==='bunker'){zona='Enterrado en el bunker'}
+    else if(dx<=10){gMult=5;zona='¡LA EMBOCÓ EN EL HOYO! ×5'}
+    else if(dx<=34){gMult=3;zona='¡CLAVADA JUNTO AL PALO! ×3'}
+    else if(dx<=85){gMult=2;zona='Anillo del medio ×2'}
+    else if(dx<=150){gMult=1.5;zona='Pisó el green ×1.5'}
+    const perf=g.perfect?1.1:1;
+    let shotPts=Math.round((m+cb.pts)*cb.mult*gMult*perf);
+    if(kind==='bunker')shotPts=Math.round(shotPts/2);
+    if(gMult>=5)this.sfxHole();else if(gMult>1)this.sfxGreen();else this.sfxLand();
+    const bails=this.state.bails+(cb.bailed?1:0);
+    const last=this.state.shot>=this.shots();
+    let clean=0;
+    if(last&&bails===0){clean=500;shotPts+=500}
+    const total=this.state.points+shotPts;
+    const best=Math.max(this.state.best,m);
+    if(total>this.state.record)this.setState({record:total});
+    let tag;
+    if(kind==='bunker')tag='LA ARENA SE LO COMIÓ';
+    else if(shotPts<1000)tag='QUÉ VERGÜENZA';
+    else if(shotPts<2500)tag='ZAFA';
+    else if(shotPts<5000)tag='BUEN REVOLEO';
+    else if(shotPts<9000)tag='TREMENDO';
+    else tag='HISTÓRICO';
+    const parts=[m+' m'];
+    if(cb.pts)parts.push('+'+cb.pts+' trucos');
+    if(cb.mult>1)parts.push('combo ×'+cb.mult.toFixed(1));
+    if(gMult>1)parts.push('green ×'+gMult);
+    if(g.perfect)parts.push('suelta ×1.1');
+    if(kind==='bunker')parts.push('bunker ÷2');
+    if(g.putted)parts.push('putt final');
+    if(clean)parts.push('ronda limpia +500');
+    const note=parts.join(' · ');
+    this.op(this.rMetros,'0');
+    this.op(this.rBest,'0');
+    this.paintCombo();
+    this.op(this.rMult,'0');
+    this.op(this.rTricks,'0');
+    this.setState({best:best,bails:bails,points:total,showRes:true,res:{m:shotPts+' PTS',tag:tag,note:note,pts:zona+'  ·  Total '+total,kicker:'Tiro '+this.state.shot+' de '+this.shots(),label:last?'Ver ranking':'Siguiente tiro',last:last}});
+  }
+  next=()=>{
+    if(this.state.res&&this.state.res.last){
+      // una fila por ronda terminada: es el histórico
+      if(this.state.player)DB.save(this.state.player.id,this.state.points,this.state.best);
+      this.setState({showRes:false,screen:'rank'});return}
+    this.setState({shot:this.state.shot+1,showRes:false},()=>this.newShot(true));
+  }
+  elegir=p=>{this.setState({player:p,screen:'title',record:p.best||0,points:0,best:0})}
+  setNombre=e=>this.setState({nombre:(e&&e.target?e.target.value:e)||''})
+  crear=()=>{this.sfxButton();this.elegir(DB.add(this.state.nombre,this.state.emoji))}
+  nuevoJugador=()=>{this.sfxButton();this.setState({screen:'nuevo',nombre:'',emoji:AVATARS[0]})}
+  cambiarJugador=()=>{this.sfxButton();this.stopMusic();
+    this.setState({screen:DB.read().players.length?'quien':'nuevo'})}
+  start=()=>{this.sfxButton();this.fadeMusic(350);this.heliOff();this.setState({screen:'play',shot:1,best:0,points:0,bails:0,showRes:false},()=>this.newShot(true))}
+  again=()=>{this.sfxButton();this.stopMusic();this.heliOff();this.setState({screen:'play',shot:1,best:0,points:0,bails:0,showRes:false},()=>this.newShot(true))}
+  toTitle=()=>{this.setState({screen:'title'});this.startMusic();}
+
+  startPutt(){const g=this.g;g.phase='putt';g.t0=this.now();g.power=0;g.manual=false;g.shake=4;
+    this.showFloat('¡ESTÁS EN EL GREEN!');
+    this.txt(this.rHint,'Último toque: apuntá al hoyo y soltá');}
+  firePutt(){const g=this.g,c=g.club;if(!c)return;
+    const ng=this.nearGreen(c.x),dir=ng-c.x>=0?1:-1,a=g.angle*Math.PI/180,v=1.4+g.power*4.6;
+    c.vx=dir*Math.cos(a)*v;c.vy=-Math.sin(a)*v;c.grounded=false;c.crashed=false;c.spin=dir*.18;
+    g.putted=true;g.phase='fly';g.flyT=0;g.air=0;g.fx.push({x:c.x,y:c.y,t:14});
+    this.txt(this.rHint,'A ver si la clavás…');}
+
+  onDown=e=>{const g=this.g;
+    if(g&&g.phase==='putt'){g.phase='puttcharge';g.t0=this.now();g.manual=false;this.y0=e.clientY;return}
+    if(g&&g.phase==='fly'&&g.club&&!g.club.crashed&&!g.club.grounded){this.flap();return}
+    this.y0=e.clientY;this.begin()}
+  flap(){const g=this.g,c=g.club,n=this.now();if(!c)return;
+    if(n-(c.lastFlap||0)<210)return;
+    if(g.air<=0){if(!c.noAir){c.noAir=true;this.showFloat('¡SIN AIRE!')}return}
+    c.lastFlap=n;g.air--;this.sfxFlap();
+    c.vy=Math.min(c.vy,0)-1.7;c.spin=Math.min(.42,c.spin+.06);
+    g.fx.push({x:c.x-10,y:c.y+4,t:12});
+    g.helpers.push({x:c.x-16,y:c.y-2,cam0:g.cam,k:HELPER_KEYS[(Math.random()*3)|0],t:0,dir:Math.random()<.5?-1:1});
+    if(g.helpers.length>8)g.helpers.shift();
+    this.txt(this.rHint,g.air>0?('Aletazos que te quedan: '+g.air):'Se quedó sin aire. A esquivar de garrón.')}
+  onMove=e=>{const g=this.g;if(!g||(g.phase!=='charge'&&g.phase!=='puttcharge')||this.y0==null)return;
+    const d=this.y0-e.clientY;if(Math.abs(d)>6)g.manual=true;
+    if(g.manual)g.angle=clamp(45+d*.3,15,70)}
+  onUp=()=>{const g=this.g;if(g&&g.phase==='puttcharge'){this.firePutt();return}this.fire()}
+
+  hit(o,c){const bx=o.x,by=GY-o.h;return c.x>bx-4&&c.x<bx+o.w+4&&c.y>by&&c.y<GY+3}
+
+  step(){
+    const g=this.g;if(!g)return;
+    const t=this.now()-g.t0;
+    if(g.phase==='intro'){
+      const b=g.ball;
+      if(t>950&&!b.rolling){b.rolling=true;b.vx=g.ballV||1.5}
+      if(b.rolling){
+        b.x+=b.vx;b.vx*=0.982;
+        if(b.hop>0){b.hop--;b.y=GY-2-Math.sin((10-b.hop)/10*Math.PI)*4}
+        else b.y=GY-2;
+        if(!b.lipped&&b.x>=this.HOLE-3){b.lipped=true;b.hop=10;this.showFloat('¡NOOO!')}
+        if(b.vx<0.15&&!g.missT){g.missT=this.now();const ins=this.insults();this.showGrito(ins[(Math.random()*ins.length)|0]);
+          this.txt(this.rHint,g.puttLong?'Se pasó de largo. Se acabó la paciencia.':'Se quedó cortísimo. Se acabó la paciencia.')}
+      }
+      if(g.missT&&this.now()-g.missT>1600){g.missT=0;g.ball=null;g.phase='ready';this.setHint()}
+    }
+    if(g.phase==='putt'||g.phase==='puttcharge'){
+      const c=g.club;if(c){const ng=this.nearGreen(c.x);
+        const target=Math.max(0,(c.x+ng)/2-W/2);
+        g.cam+=(target-g.cam)*.12;}
+    }
+    if(g.phase==='charge'||g.phase==='puttcharge'){
+      const cyc=t%2600;
+      g.power=cyc<1600?cyc/1600:1-((cyc-1600)/1000)*.72;
+      if(!g.manual){const s=(t%3000)/3000,tri=s<.5?s*2:2-s*2;g.angle=22+tri*40}
+    }
+    if(g.phase==='putt'&&!g.manual){const s=(t%3000)/3000,tri=s<.5?s*2:2-s*2;g.angle=22+tri*40}
+    if(g.phase==='swing'&&t>90)this.launch();
+    if(g.rageT>0)g.rageT--;
+    if(g.phase==='fly'){
+      g.acc=(g.acc||0)+VUELO;
+      const c=g.club;
+      if(g.acc>=1){g.acc-=1;g.flyT++;
+      const sp=Math.hypot(c.vx,c.vy),drag=1-Math.min(.007,0.0008+sp*0.0004);
+      c.vy+=G*0.44;c.vx+=g.wind*0.0009;
+      if(!c.grounded){c.vx*=drag;c.vy*=drag;}
+      c.vx=clamp(c.vx,-16,16);
+      c.x+=c.vx;c.y+=c.vy;
+      if(c.y<50){c.y=50;if(c.vy<0)c.vy=.5;
+        // Antes acá iba g.air=Math.min(g.air,1). El palo sale a y=188 y el techo
+        // está en y=50, así que TODO tiro lo tocaba y te comía 2 aletazos de una
+        // sin que tocaras la pantalla. El techo ya castiga cortando la subida.
+        if(!c.roof){c.roof=true;this.showFloat('¡ASTRONAUTA!');this.trick('ASTRONAUTA',100,.2)}}
+      if(!c.grounded){
+        // el palo tumbea cabeza-pesada: gira más rápido en la subida, se acomoda al caer
+        c.spin+=(0.13+Math.min(.14,sp*0.012)-c.spin)*0.02;
+        c.rot+=c.spin;
+        c.rotAcc=(c.rotAcc||0)+Math.abs(c.spin);
+        if(c.rotAcc>=6.283){c.rotAcc-=6.283;this.trick('HELICÓPTERO',25,.1)}
+        if(g.flyT%2===0){c.trail.push({x:c.x,y:c.y,rot:c.rot});if(c.trail.length>6)c.trail.shift();}
+      } else {
+        c.rot+=c.spin;
+        const target=Math.round(c.rot/Math.PI)*Math.PI;
+        c.rot+=(target-c.rot)*Math.min(.35,0.06+ (1-Math.min(1,Math.abs(c.vx)))*0.25);
+        if(c.trail.length)c.trail.shift();
+      }
+      for(const o of g.obs){
+        // g.obs está ordenado por x: en cuanto uno está lejos por delante, el
+        // resto también. Antes se recorría el array completo en cada frame.
+        if(c.x<o.x-30)break;
+        if(o.hit)continue;
+        if(!o.near&&!this.hit(o,c)&&c.x>o.x-8&&c.x<o.x+o.w+8&&c.y<GY-o.h&&c.y>GY-o.h-20){o.near=true;this.trick('AL RAS',50,.2)}
+        if(this.hit(o,c)){
+          o.hit=true;
+          c.crashed=true;c.vx*=.22;c.vy=Math.abs(c.vy)*.35+.6;c.spin=(Math.random()<.5?-1:1)*.34;
+          if(o.t==='tree'){this.showFloat('¡CONTRA EL ÁRBOL!');this.bail()}
+          else if(o.t==='cart'){this.showFloat('¡LE DIO AL CARRITO!');this.trick('CARRITAZO',80,.2)}
+          else if(o.t==='caddie'){this.showFloat('¡PERDÓN, CADDIE!');this.bail()}
+          else{this.showFloat('¡LE DIO A '+o.who+'!');this.trick('SDGA '+o.who,150,.3)}
+          g.shake=6;
+          g.fx.push({x:c.x,y:c.y,t:20});
+        }
+      }
+      for(const p of (g.pel||[])){
+        if(p.near)continue;
+        const pScreen=p.x-g.cam*0.62,cScreen=c.x-g.cam;
+        if(Math.abs(cScreen-pScreen)>10)continue;
+        if(Math.abs(c.y-p.y)<14){p.near=true;this.trick('PELICANAZO',75,.2);this.showFloat('¡AL RAS DEL PELÍCANO!')}
+      }
+      if(c.y>=GY){
+        c.y=GY;
+        const inB=g.bunkers.some(b=>c.x>=b.x&&c.x<=b.x+b.w);
+        if(inB){c.vx=0;c.vy=0;this.endShot('bunker')}
+        else if(Math.abs(c.vy)>.45){
+          // primer pique: clava la cabeza, salta bajo y pierde giro
+          const hard=Math.abs(c.vy)>3;
+          c.vy=-Math.abs(c.vy)*(hard?.28:.4);c.vx*=hard?.62:.82;
+          c.spin=c.spin*.35+c.vx*.045+(Math.random()-.5)*.06;
+          g.dust.push({x:c.x,y:GY,t:18});if(hard)g.dust.push({x:c.x-6,y:GY,t:14});
+        }
+        else{c.grounded=true;c.vy=0;c.vx*=.88;c.spin*=.6;
+          if(Math.abs(c.vx)<.12||g.flyT>3600){
+            const ng=this.nearGreen(c.x);
+            if(!g.putted&&Math.abs(c.x-ng)<=150)this.startPutt();
+            else this.endShot('ok');
+          }}
+      }
+      }
+      const lastO=g.obs.length?g.obs[g.obs.length-1].x:0;
+      if(lastO-c.x<900){let nx=lastO+rnd(230,430);
+        for(let k=0;k<4;k++){if(!this.inGreen(nx)){const r=Math.random();
+          if(r<.34)g.obs.push({t:'tree',x:nx,w:26,h:46});
+          else if(r<.52)g.obs.push({t:'cart',x:nx,w:30,h:20});
+          else if(r<.7)g.obs.push({t:'caddie',x:nx,w:16,h:30});
+          else g.obs.push({t:'sdga',x:nx,w:18,h:30,who:SDGA_EMOJI[(Math.random()*8)|0]});}
+          nx+=rnd(230,430);}}
+      // El cartel de distancia y el contador de metros cambiaban de texto en cada
+      // frame, y cada escritura invalida estilo y layout. hudT cuenta pasos de
+      // lógica: 20 Hz para los metros (el palo no avanza más rápido que eso por
+      // el slomo) y 10 Hz para el cartel. Se lee igual y el layout descansa.
+      g.hudT=(g.hudT||0)+1;
+      if(g.club&&!g.club.grounded&&g.hudT%6===0){const d=(this.nearGreen(c.x)-c.x)/PXM;
+        this.txt(this.rHint,(d>0?'Green a '+Math.round(d)+' m':'Green pasado')+' · aletazos: '+g.air);}
+      g.cam+=((Math.max(0,c.x-48))-g.cam)*.09;
+      if(g.hudT%3===0)this.txt(this.rMetros,Math.round(Math.max(0,(c.x-TEE)/PXM))+' M');
+      this.cull(g.obs,g.cam-160);
+      this.cull(g.pel,g.cam*0.62-40);
+      this.cull(g.nut,g.cam-60);
+      this.cull(g.zor,g.cam-60);
+    }
+    this.prune(g.fx);this.prune(g.dust);
+    this.txt(this.rBest,'Total '+this.state.points+' pts');
+    this.txt(this.rShot,this.state.shot+'/'+this.shots());
+  }
+
+  // fillStyle es un setter que reparsea el color en cada asignación. Con ~500
+  // llamadas a px() por frame (los sprites de pixel art son celda por celda) eso
+  // pesa, y los tramos contiguos casi siempre repiten color: lo cacheamos.
+  fs(col){const c=this.ctx;if(this._fs!==col){this._fs=col;c.fillStyle=col}}
+  px(x,y,w,h,col){this.fs(col);this.ctx.fillRect(Math.round(x),Math.round(y),w,h)}
+  drawArt(a,cx,cy,s){if(!a)return;const x0=Math.round(cx-a.w*s/2),y0=Math.round(cy-a.h*s/2);
+    // Agrupa tramos horizontales del mismo color: un fillRect por tramo en vez
+    // de uno por celda. Un pelícano baja de ~40 rects a ~14.
+    for(let ry=0;ry<a.r.length;ry++){const row=a.r[ry];let rx=0;
+      while(rx<row.length){const col=a.p[row[rx]];
+        if(!col){rx++;continue}
+        let n=1;while(rx+n<row.length&&a.p[row[rx+n]]===col)n++;
+        this.px(x0+rx*s,y0+ry*s,s*n,s,col);rx+=n}}}
+  get HOLE(){return TEE+62}
+
+  draw(){
+    const cv=this.cv.current;if(!cv)return;
+    // alpha:false evita que el compositor mezcle el canvas con la página en cada
+    // frame. Es seguro porque el cielo y el suelo tapan el canvas completo.
+    if(cv.width!==W*2){cv.width=W*2;cv.height=H*2;this.ctx=cv.getContext('2d',{alpha:false});this._fs=null;this._font=null}
+    const ctx=this.ctx,g=this.g;
+    let shk=0;
+    if(g.shake>0){shk=g.shake;g.shake-=1;}
+    ctx.setTransform(2,0,0,2,shk?(Math.random()-.5)*shk*2:0,shk?(Math.random()-.5)*shk*2:0);
+    ctx.imageSmoothingEnabled=false;
+    const cam=g.cam;
+    // Los fondos sangran 8 px fuera del canvas: con el shake el transform corre
+    // todo hasta 7 px y antes quedaba una franja sin pintar en el borde.
+    this.px(-8,-8,W+16,GY+8,'#D9E8DC');
+    this.px(-8,58,W+16,34,'#C7DFCE');
+    this.px(-8,92,W+16,26,'#B7D4C2');
+    this.fs('#F4EEDA');ctx.beginPath();ctx.arc(104,44,13,0,7);ctx.fill();
+    const h1=-((cam*.14)%96);
+    for(let i=-1;i<4;i++){const bx=h1+i*96;this.px(bx,164,96,GY-164,'#2E7D4F');
+      this.fs('#2E7D4F');ctx.beginPath();ctx.ellipse(bx+48,166,54,16,0,Math.PI,0);ctx.fill();}
+    const h2=-((cam*.36)%74);
+    for(let i=-1;i<4;i++){const bx=h2+i*74;this.px(bx,192,74,GY-192,'#256B43');
+      this.fs('#256B43');ctx.beginPath();ctx.ellipse(bx+37,194,42,11,0,Math.PI,0);ctx.fill();}
+    this.px(-8,GY,W+16,H-GY+8,'#1C5638');
+    for(const p of (g.pel||[])){const pxx=p.x-cam*0.62;if(pxx<-24)continue;if(pxx>W+24)break;
+      const fl=Math.sin(this.now()/260+p.ph);
+      this.drawArt(FAUNA_ART.pelicano,pxx,p.y+fl*3,2);}
+    for(let i=0;i<10;i++)this.px(-8,GY+2+i*7,W+16,3,i%2?'#1A5034':'#1C5638');
+    // Antes eran 60 y 141 iteraciones fijas de las que sólo ~4 y ~3 caían dentro
+    // del canvas; ahora se recorre nada más el tramo visible.
+    for(let wx=-((cam*.9)%41);wx<W;wx+=41)this.px(wx,GY-3,2,3,'#2E7D4F');
+    for(const b of g.bunkers){const bx=b.x-cam;if(bx+b.w<0)continue;if(bx>W)break;
+      this.px(bx,GY-2,b.w,12,'#E7DFCA');this.px(bx+3,GY,b.w-6,4,'#D6C79A')}
+    for(const gwx of (g.greens||[])){const gx=gwx-cam;
+    if(gx>-140&&gx<W+140){
+      ctx.save();this.fs('#4E9E6B');ctx.beginPath();ctx.ellipse(gx,GY+3,150,16,0,0,7);ctx.fill();
+      this.fs('#63B37E');ctx.beginPath();ctx.ellipse(gx,GY+2,85,11,0,0,7);ctx.fill();
+      this.fs('#7FC895');ctx.beginPath();ctx.ellipse(gx,GY+1,34,6,0,0,7);ctx.fill();
+      ctx.restore();this._fs=null;
+      this.px(gx-1,GY-34,1,34,'#F4EEDA');
+      this.fs('#E8C34A');ctx.beginPath();ctx.moveTo(gx,GY-34);ctx.lineTo(gx+13,GY-30);ctx.lineTo(gx,GY-25);ctx.fill();
+      this.px(gx-3,GY-1,6,2,'#14402A');
+    }
+    }
+    // (acá iban marcas de distancia cada 20 m con banderita cada 100: ensuciaban
+    //  todo el campo y los metros ya están en el HUD. Las únicas banderas que
+    //  quedan son las de los greens y la del hoyo del putt inicial.)
+    if(g.phase==='intro'){
+      const fx=this.HOLE-cam;
+      this.px(fx-4,GY-2,9,3,'#14402A');
+      this.px(fx+3,GY-30,1,30,'#F4EEDA');
+      this.fs('#E8C34A');ctx.beginPath();ctx.moveTo(fx+4,GY-30);ctx.lineTo(fx+16,GY-26);ctx.lineTo(fx+4,GY-21);ctx.fill();
+      if(g.ball){this.px(g.ball.x-cam,g.ball.y-2,3,3,'#F4EEDA')}
+    }
+    for(const n of (g.nut||[])){const nx2=n.x-cam;if(nx2<-30)continue;if(nx2>W+30)break;
+      const bob=Math.sin(this.now()/420+n.ph)>0?0:1;
+      this.drawArt(FAUNA_ART.nutria,nx2,GY-8+bob,2);}
+    for(const z of (g.zor||[])){const zx2=z.x-cam;if(zx2<-36)continue;if(zx2>W+36)break;
+      const j=Math.abs(Math.sin(this.now()/560+z.ph));
+      this.drawArt(FAUNA_ART.zorro,zx2,GY-12-j*16,2);}
+    for(const o of g.obs){const ox=o.x-cam;if(ox+o.w<-34)continue;if(ox>W+34)break;
+      if(o.t==='tree'){this.px(ox+10,GY-18,6,18,'#3D2A18');
+        this.fs(o.hit?'#6FAE87':'#14402A');ctx.beginPath();ctx.arc(ox+13,GY-32,15,0,7);ctx.fill();
+        this.fs(o.hit?'#8FC7A3':'#1C5638');ctx.beginPath();ctx.arc(ox+8,GY-37,9,0,7);ctx.fill();}
+      else if(o.t==='cart'){this.px(ox,GY-16,30,10,o.hit?'#E8C34A':'#F4EEDA');this.px(ox+3,GY-24,18,8,'#D9E8DC');
+        this.px(ox+3,GY-6,6,6,'#0C2B1C');this.px(ox+20,GY-6,6,6,'#0C2B1C')}
+      else if(o.t==='caddie'){this.px(ox+3,GY-30,10,10,'#E8B48C');this.px(ox+2,GY-20,13,13,o.hit?'#BC4B3C':'#E7DFC2');
+        this.px(ox+3,GY-7,4,7,'#14402A');this.px(ox+9,GY-7,4,7,'#14402A');this.px(ox+14,GY-28,4,20,'#C9A22E')}
+      else{this.px(ox+4,GY-30,11,10,'#E8B48C');this.px(ox+2,GY-20,15,13,o.hit?'#BC4B3C':'#6FAE87');
+        this.px(ox+4,GY-7,4,7,'#14402A');this.px(ox+10,GY-7,4,7,'#14402A');
+        if(this._font!=='12px serif'){this._font='12px serif';ctx.font='12px serif';ctx.textAlign='center'}
+        this.fs('#14402A');ctx.fillText(o.who,ox+9,GY-33)}}
+    const mx=TEE-16-cam,my=GY-MH,t=this.now()-g.t0;
+    if(g.phase==='intro'){
+      // putt: el palo va y viene como péndulo, golpea a los 950ms y sigue cortito
+      const A0=1.16;let ang=A0,sx=0,sy=0,p='p_02_preparacion';
+      if(t<700)ang=A0+Math.sin(t/230)*0.30;
+      else if(t<880)ang=A0+0.30-((t-700)/180)*0.46;
+      else if(t<1500)ang=A0-0.16-Math.min(0.22,(t-880)/620*0.22);
+      else ang=A0-0.34;
+      if(g.missT){const e=this.now()-g.missT;p=e>500?'p_08_festejo':'p_05_follow_through';
+        this.drawMig(p,mx+((e/60|0)%2?1:-1),my,e>300,0,0,e>500?false:undefined);}
+      else this.drawMig(p,mx,my,false,sx,sy,ang);
+    }
+    else if(g.phase==='charge'){
+      const now=this.now(),dt=Math.min(60,now-(this._spinT||now));this._spinT=now;
+      g.spin=(g.spin||0)+dt*(0.008+g.power*0.028);
+      const sw=Math.sin(g.spin),cw=Math.cos(g.spin),sq=Math.round(g.power*2);
+      const bx=mx+Math.round(cw*2),by=my+Math.round(Math.abs(sw)*1.5)-1;
+      this.drawMig('p_09_carga',bx,by,g.power>.55,sq,-sq);
+      const px=Math.round(bx+16+cw*2),py=Math.round(by+11);
+      for(let k=1;k<=3;k++){const a=g.spin-k*.34;ctx.save();ctx.globalAlpha=.14*(4-k);
+        this.drawClub(px,py,a);ctx.restore();}
+      this.drawClub(px,py,g.spin);
+    }
+    else if(g.phase==='swing'){
+      if(t<45){this.drawMig('p_09_carga',mx,my-1,true,3,-3);
+        this.drawClub(mx+16,my+10,g.relSpin||0);}
+      else this.drawMig('p_07_lanzamiento',mx+2,my,true,-3,5);
+    }
+    else if(g.rageT>0){const bob=Math.abs(Math.sin(g.rageT*.1))*6,up=bob>3;this.drawMig('p_08_festejo',mx,my-bob,true,up?-2:2,up?3:-2)}
+    else{const br=Math.sin(this.now()/620)>0?0:1;this.drawMig('p_01_reposo',mx,my,false,0,-br)}
+    if(g.phase==='charge'||g.phase==='ready'){
+      const a=g.angle*Math.PI/180,ox=TEE+2-cam,oy=GY-40,R=46;
+      ctx.save();ctx.lineWidth=1;
+      ctx.strokeStyle='rgba(244,238,218,.28)';ctx.setLineDash([2,3]);
+      ctx.beginPath();ctx.arc(ox+.5,oy+.5,R,-70*Math.PI/180,-15*Math.PI/180);ctx.stroke();
+      ctx.setLineDash([]);ctx.restore();
+      for(const dg of [15,30,45,60,70]){const t2=dg*Math.PI/180;
+        this.px(ox+Math.cos(t2)*(R-3),oy-Math.sin(t2)*(R-3),2,2,'rgba(244,238,218,.45)');}
+      const len=18+g.power*(R-18);
+      for(let i=6;i<len;i+=4)this.px(ox+Math.cos(a)*i,oy-Math.sin(a)*i,2,2,'rgba(244,238,218,.9)');
+      this.px(ox+Math.cos(a)*R,oy-Math.sin(a)*R,4,4,'#E8C34A');
+    }
+    if(g.phase==='fly'){
+      for(let i=0;i<3;i++)this.px(W/2-6+i*6,44,4,4,i<g.air?'#E8C34A':'rgba(244,238,218,.22)');
+    }
+    for(const hp of (g.helpers||[])){hp.t++;const hx=hp.x-hp.cam0-(cam-hp.cam0)*0.18;if(hx<-30||hx>W+30)continue;
+      const k=Math.min(1,hp.t/18),ease=1-(1-k)*(1-k);
+      const fx2=hx+hp.dir*40*(1-ease),fy=hp.y+24*(1-ease)+Math.sin((this.now()+hp.x*7)/420)*2;
+      ctx.save();ctx.globalAlpha=.5+.5*ease;this.drawArt(HELPER_ART[hp.k],fx2,fy,2);ctx.restore();this._fs=null;}
+    if(g.phase==='putt'||g.phase==='puttcharge'){
+      const c=g.club,ng=this.nearGreen(c.x),dir=ng-c.x>=0?1:-1;
+      const a=g.angle*Math.PI/180,ox=c.x-cam,oy=c.y-6,R=40;
+      const len=14+g.power*(R-14);
+      for(let i=6;i<len;i+=4)this.px(ox+dir*Math.cos(a)*i,oy-Math.sin(a)*i,2,2,'rgba(244,238,218,.9)');
+      this.px(ox+dir*Math.cos(a)*len,oy-Math.sin(a)*len,4,4,'#E8C34A');
+      this.px(ng-cam-1,GY-40,2,6,'#E8C34A');
+    }
+    if(g.club&&(g.phase==='fly'||g.phase==='done'||g.phase==='putt'||g.phase==='puttcharge')){
+      const c=g.club;
+      if(c.trail)c.trail.forEach((p,i)=>{ctx.save();ctx.globalAlpha=.07*(i+1);
+        this.drawClub(p.x-cam,p.y,p.rot,true);ctx.restore();});
+      this.drawClub(c.x-cam,c.y,c.rot,true);}
+    for(const f of g.fx){const s=(21-f.t);this.px(f.x-cam-s/2,f.y-s/2,s,1,'rgba(232,195,74,.8)');this.px(f.x-cam,f.y-s,1,s*2,'rgba(232,195,74,.5)')}
+    for(const d of g.dust)this.px(d.x-cam-(19-d.t),GY-2,(19-d.t)*2,2,'rgba(244,238,218,.4)');
+    this.px(TEE-18-cam,GY-1,20,2,'#D9E8DC');
+  }
+
+  renderVals(){
+    const s=this.state,res=s.res||{},me=s.player;
+    const isRank=s.screen==='rank',isQuien=s.screen==='quien',isNuevo=s.screen==='nuevo';
+    // la base se lee sólo en las pantallas que la muestran: durante el juego
+    // renderVals corre en cada setState y no queremos un JSON.parse de más
+    let rank=[],pos=0;
+    if(isRank){
+      rank=DB.read().players.filter(p=>p.best>0)
+        .map(p=>({emoji:p.emoji,name:p.name,m:p.best,you:!!me&&p.id===me.id}))
+        .concat(RECORDS.map(r=>({emoji:r[0],name:r[1],m:r[2],you:false})));
+      rank.sort((a,b)=>b.m-a.m);
+      pos=rank.findIndex(r=>r.you)+1;
+    }
+    return{
+      dark:true,devW:372,devH:808,
+      hasRecord:s.record>0,
+      recordLine:'Récord de '+(me?me.name:'Miguelón')+': '+s.record+' pts',
+      isQuien:isQuien,isNuevo:isNuevo,
+      quienSoy:me?me.emoji+'  '+me.name:'',
+      nombre:s.nombre,puedeCrear:s.nombre.trim().length>0,
+      jugadoresHay:(isQuien||isNuevo)&&DB.read().players.length>0,
+      emojis:isNuevo?AVATARS.map(e=>({e:e,sel:e===s.emoji,pick:()=>this.setState({emoji:e})})):[],
+      jugadores:isQuien?DB.read().players.sort((a,b)=>b.visto-a.visto)
+        .map(p=>({id:p.id,emoji:p.emoji,name:p.name,best:p.best,
+          detalle:p.rondas?p.best+' pts · '+p.rondas+(p.rondas===1?' ronda':' rondas'):'sin rondas',
+          pick:()=>{this.sfxButton();this.elegir(p)}})):[],
+      elegir:this.elegir,crear:this.crear,setNombre:this.setNombre,
+      nuevoJugador:this.nuevoJugador,cambiarJugador:this.cambiarJugador,
+      isTitle:s.screen==='title',isPlay:s.screen==='play',isRank:isRank,
+      cv:this.cv,rShot:this.rShot,rWind:this.rWind,rMetros:this.rMetros,rBest:this.rBest,
+      rGrito:this.rGrito,rFloat:this.rFloat,rHint:this.rHint,rMult:this.rMult,rTricks:this.rTricks,
+      onDown:this.onDown,onMove:this.onMove,onUp:this.onUp,
+      start:this.start,next:this.next,again:this.again,toTitle:this.toTitle,
+      showRes:s.showRes,notRes:!s.showRes,resMeters:res.m,resTag:res.tag,resNote:res.note,resPts:res.pts,resKicker:res.kicker,nextLabel:res.label,
+      totalPts:s.points+' puntos en la ronda',
+      ranking:rank.map((r,i)=>({pos:i+1,emoji:r.emoji,name:r.name,m:r.m,you:r.you})),
+      rankVerdict:pos===1?'Miguelón es el campeón del revoleo':pos<=3?'Podio, maestro':pos<=6?'Zafaste, entraste':'Último. Practicá la bronca'
+    };
+  }
+}
+/* === FIN DEL MOTOR ================================================ */
+
+const game = new Component();
+game.props = { tiros: 3, censura: 'Sin filtro', viento: true, sonido: true };
+
+// los refs del motor apuntan directo a los nodos del shell
+const REFS = { cv:'cv', rShot:'rShot', rWind:'rWind', rMetros:'rMetros', rBest:'rBest',
+  rGrito:'rGrito', rFloat:'rFloat', rHint:'rHint', rMult:'rMult', rTricks:'rTricks' };
+for (const k in REFS) game[k].current = $(REFS[k]);
+
+const scr = { title: $('scr-title'), play: $('scr-play'), rank: $('scr-rank'),
+              quien: $('scr-quien'), nuevo: $('scr-nuevo') };
+let lastRankKey = '', lastListKey = '', lastEmojiKey = '';
+
+// fila táctil reutilizable (jugadores y ranking comparten el mismo look)
+const cell = (css, txt) => { const d = document.createElement('div'); d.style.cssText = css;
+  d.textContent = txt; return d; };
+
+HOST = {
+  paint(){
+    const v = game.renderVals();
+    scr.title.classList.toggle('hide', !v.isTitle);
+    scr.play.classList.toggle('hide', !v.isPlay);
+    scr.rank.classList.toggle('hide', !v.isRank);
+    scr.quien.classList.toggle('hide', !v.isQuien);
+    scr.nuevo.classList.toggle('hide', !v.isNuevo);
+
+    $('recordLine').classList.toggle('hide', !v.hasRecord);
+    if (v.hasRecord) $('recordLine').textContent = v.recordLine;
+    $('quienSoy').textContent = v.quienSoy;
+
+    if (v.isQuien){
+      const key = v.jugadores.map(j => j.id + j.best).join('|');
+      if (key !== lastListKey){
+        lastListKey = key;
+        $('playerList').replaceChildren(...v.jugadores.map(j => {
+          const row = document.createElement('button');
+          row.style.cssText = 'display:flex;align-items:center;gap:12px;background:#F4EEDA;' +
+            'border:0;border-radius:14px;padding:11px 14px;cursor:pointer;text-align:left;width:100%;font:inherit';
+          const txt = document.createElement('div');
+          txt.style.cssText = 'flex:1;display:flex;flex-direction:column;gap:2px';
+          txt.append(
+            cell('font-family:var(--font-display);font-size:18px;line-height:1;color:#14402A;text-transform:uppercase', j.name),
+            cell('font:400 10px/1 var(--font-body);color:#5E6E5F', j.detalle));
+          row.append(cell('font-size:26px;line-height:1', j.emoji), txt);
+          row.addEventListener('click', j.pick);
+          return row;
+        }));
+      }
+    }
+    if (v.isNuevo){
+      const inp = $('inpNombre');
+      if (inp.value !== v.nombre) inp.value = v.nombre;   // no pisar el cursor al tipear
+      $('btnCrear').disabled = !v.puedeCrear;
+      $('btnCrear').style.opacity = v.puedeCrear ? '1' : '.45';
+      $('btnVolver').classList.toggle('hide', !v.jugadoresHay);
+      const key = v.emojis.map(x => x.e + (x.sel ? '*' : '')).join('');
+      if (key !== lastEmojiKey){
+        lastEmojiKey = key;
+        $('emojiGrid').replaceChildren(...v.emojis.map(x => {
+          const b = document.createElement('button');
+          b.textContent = x.e;
+          b.setAttribute('aria-label', 'Elegir ' + x.e);
+          b.setAttribute('aria-pressed', String(x.sel));
+          b.style.cssText = 'width:46px;height:46px;display:flex;align-items:center;justify-content:center;' +
+            'font-size:24px;border-radius:12px;cursor:pointer;' +
+            (x.sel ? 'background:#E8C34A;border:2px solid #F4EEDA' : 'background:rgba(244,238,218,.1);border:2px solid transparent');
+          b.addEventListener('click', x.pick);
+          return b;
+        }));
+      }
+    }
+
+    $('resSheet').classList.toggle('hide', !v.showRes);
+    $('hintBox').classList.toggle('hide', !v.notRes);
+    if (v.showRes){
+      $('resKicker').textContent = v.resKicker || '';
+      $('resMeters').textContent = v.resMeters || '';
+      $('resTag').textContent = v.resTag || '';
+      $('resNote').textContent = v.resNote || '';
+      $('resPts').textContent = v.resPts || '';
+      $('btnNext').textContent = v.nextLabel || 'Siguiente tiro';
+    }
+    if (v.isRank){
+      $('rankVerdict').textContent = v.rankVerdict;
+      $('totalPts').textContent = v.totalPts;
+      const key = JSON.stringify(v.ranking);
+      if (key !== lastRankKey){                     // sólo si cambió de verdad
+        lastRankKey = key;
+        $('rankList').replaceChildren(...v.ranking.map(r => {
+          const row = document.createElement('div');
+          row.style.cssText = 'position:relative;display:flex;align-items:center;gap:10px;background:#F4EEDA;border-radius:13px;padding:9px 12px';
+          const cell = (css, txt) => { const d = document.createElement('div');
+            d.style.cssText = css; d.textContent = txt; return d; };
+          row.append(
+            cell('font-family:var(--font-display);font-size:17px;color:#5E6E5F;width:22px', r.pos),
+            cell('font-size:19px;line-height:1', r.emoji),
+            cell('font-family:var(--font-display);font-size:16px;color:#14402A;text-transform:uppercase;flex:1', r.name),
+            cell('font-family:var(--font-display);font-size:19px;color:#1C5638', r.m));
+          if (r.you){ const ring = document.createElement('div');
+            ring.style.cssText = 'position:absolute;inset:-2px;border:3px solid #E8C34A;border-radius:15px;pointer-events:none';
+            row.append(ring); }
+          return row;
+        }));
+      }
+    }
+  }
+};
+
+$('btnNuevo').addEventListener('click', () => game.nuevoJugador());
+$('btnVolver').addEventListener('click', () => game.cambiarJugador());
+$('btnQuien').addEventListener('click', () => game.cambiarJugador());
+$('btnCrear').addEventListener('click', () => game.crear());
+$('inpNombre').addEventListener('input', e => game.setNombre(e));
+$('inpNombre').addEventListener('keydown', e => {
+  if (e.key === 'Enter' && game.renderVals().puedeCrear) { e.preventDefault(); game.crear(); }
+});
+$('btnStart').addEventListener('click', () => game.start());
+$('btnNext').addEventListener('click', () => game.next());
+$('btnAgain').addEventListener('click', () => game.again());
+$('btnTitle').addEventListener('click', () => game.toTitle());
+const zone = scr.play;
+zone.addEventListener('pointerdown', e => { zone.setPointerCapture(e.pointerId); game.onDown(e); });
+zone.addEventListener('pointermove', e => game.onMove(e));
+zone.addEventListener('pointerup',   e => game.onUp(e));
+zone.addEventListener('pointercancel', e => game.onUp(e));
+
+// el escenario de 372x808 se escala para llenar la pantalla sin deformarse
+const stage = $('stage');
+const fit = () => {
+  const r = document.getElementById('wrap').getBoundingClientRect();
+  const w = r.width || innerWidth, h = r.height || innerHeight;
+  document.documentElement.style.setProperty('--s', Math.min(w / 372, h / 808));
+};
+// ResizeObserver y no sólo el evento resize: el evento no dispara en todos los
+// contextos (documentos embebidos/ocultos) y el escenario quedaba mal escalado.
+if (window.ResizeObserver) new ResizeObserver(fit).observe(document.getElementById('wrap'));
+addEventListener('resize', fit, { passive: true });
+addEventListener('orientationchange', () => setTimeout(fit, 50));
+if (window.visualViewport) visualViewport.addEventListener('resize', fit, { passive: true });
+fit();
+
+HOST.paint();
+game.componentDidMount();
+HOST.paint();
+</script>
+</body>
+</html>
