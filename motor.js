@@ -52,7 +52,77 @@
     return out;
   }
 
-  const api = { F: F, acotar: acotar, metros: metros, paso: paso, trayectoria: trayectoria };
+  const TIPOS = {
+    tree:   { w: 26, h: 46 },
+    cart:   { w: 30, h: 20 },
+    caddie: { w: 16, h: 30 },
+    sdga:   { w: 18, h: 30 },
+  };
+  const CLAVES = ['tree', 'cart', 'caddie', 'sdga'];
+
+  // Congruencial lineal: aleatorio determinista, para que los tests reproduzcan
+  // exactamente el mismo escenario a partir de una semilla.
+  function lcg(semilla) {
+    let s = semilla >>> 0 || 1;
+    return function () { s = (s * 1103515245 + 12345) & 0x7fffffff; return s / 0x7fffffff; };
+  }
+
+  function crear(rand, x) {
+    const t = CLAVES[(rand() * CLAVES.length) | 0], d = TIPOS[t];
+    return { t: t, x: Math.round(x), w: d.w, h: d.h, cima: F.GY - d.h };
+  }
+
+  function generar(rand, desde, hasta) {
+    const out = [];
+    for (let x = desde; x < hasta; x += 90 + rand() * 150) out.push(crear(rand, x));
+    return out;
+  }
+
+  // Obstáculos que la trayectoria desde `est` cruza a la altura de su cima.
+  // Se pide que el palo esté bajando (vy > 0) para no contar los que pasa por
+  // debajo mientras sube.
+  function alcanzables(obs, est) {
+    const tr = trayectoria(est, 1200), out = [];
+    for (const o of obs) {
+      if (o.x + o.w < est.x) continue;
+      for (let i = 1; i < tr.length; i++) {
+        const a = tr[i - 1], b = tr[i];
+        if (b.vy <= 0) continue;
+        const cruzaX = b.x >= o.x && a.x <= o.x + o.w;
+        const cruzaY = a.y <= o.cima && b.y >= o.cima;
+        if (cruzaX && cruzaY) { out.push(o); break; }
+      }
+    }
+    return out;
+  }
+
+  // Invariante de solvencia: si desde `est` no hay nada alcanzable, se planta un
+  // obstáculo donde el arco cruza la altura de rebote. Random pero siempre
+  // superable — sin esto el jugador pierde por un hueco que no controlaba.
+  function rellenar(obs, rand, est) {
+    if (alcanzables(obs, est).length) return false;
+    const tr = trayectoria(est, 1200);
+    let puesto = null;
+    for (const clave of CLAVES) {
+      const cima = F.GY - TIPOS[clave].h;
+      for (let i = 1; i < tr.length; i++) {
+        if (tr[i].vy > 0 && tr[i - 1].y <= cima && tr[i].y >= cima) {
+          puesto = { t: clave, x: Math.round(tr[i].x - TIPOS[clave].w / 2),
+                     w: TIPOS[clave].w, h: TIPOS[clave].h, cima: cima };
+          break;
+        }
+      }
+      if (puesto) break;
+    }
+    if (!puesto) return false;
+    obs.push(puesto);
+    obs.sort((a, b) => a.x - b.x);
+    return true;
+  }
+
+  const api = { F: F, acotar: acotar, metros: metros, paso: paso, trayectoria: trayectoria,
+                TIPOS: TIPOS, lcg: lcg, generar: generar, alcanzables: alcanzables,
+                rellenar: rellenar };
   if (typeof module !== 'undefined' && module.exports) module.exports = api;
   else raiz.Motor = api;
 })(typeof window !== 'undefined' ? window : globalThis);
