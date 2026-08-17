@@ -724,7 +724,11 @@ class Component extends DCLogic{
         // g.obs está ordenado por x: en cuanto uno está lejos por delante, el
         // resto también. Antes se recorría el array completo en cada frame.
         if(c.x<o.x-30)break;
-        if(o.hit)continue;
+        // inerte: el que Motor.rellenar marcó porque el objetivo plantado le cae encima.
+        // Sin esto es pared en el MISMO x en que el objetivo es plataforma, el palo
+        // rebota y se estrella en el mismo paso de física y el jugador no tiene nada
+        // que hacer al respecto. Era la única muerte de un bot impecable.
+        if(o.hit||o.inerte)continue;
         // El objetivo es plataforma de rebote, no pared. Sin esto el choque se
         // resolvía en el MISMO paso de física en que el palo cruza la cima, o sea
         // antes de que el jugador pudiera tocar: le comía el 65% de vx cada vez
@@ -732,11 +736,6 @@ class Component extends DCLogic{
         // dejaba inalcanzable la mitad tardía de la ventana de perfecto, que es
         // simétrica en resolverRebote. El resto de los obstáculos sigue chocando.
         if(o===g.objetivo)continue;
-        // No hay que eximir además al vecino que solapa al objetivo: Motor.rellenar
-        // saca de la cancha lo que el plantado solapa, así que no queda ninguno. Se
-        // arregla ahí y no acá porque una exención atada al objetivo VIGENTE deja un
-        // agujero: cuando buscarObjetivo() avanza, un vecino más alto que el objetivo
-        // viejo vuelve a ser pared mientras el palo todavía está saliendo de su caja.
         if(!o.near&&!this.hit(o,c)&&c.x>o.x-8&&c.x<o.x+o.w+8&&c.y<GY-o.h&&c.y>GY-o.h-20){o.near=true;this.trick('AL RAS',50,.2)}
         if(this.hit(o,c)){
           o.hit=true;
@@ -754,9 +753,7 @@ class Component extends DCLogic{
           // casi siempre vuelve vacío: el objetivo queda en null, el toque no hace
           // nada y el vuelo muere en el suelo, que es lo coherente.
           // Seguro dentro del for..of: acá c.vy=|vy|*.35+.6 es SIEMPRE > 0, así que
-          // rellenar corta por 'sin-salida' sin tocar g.obs. Importa más que antes:
-          // la rama que planta ahora TAMBIÉN saca de g.obs lo que el plantado solapa,
-          // y un splice a mitad de este for..of se saltearía obstáculos.
+          // rellenar corta por 'sin-salida' sin tocar g.obs.
           this.buscarObjetivo();
         }
       }

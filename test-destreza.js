@@ -168,10 +168,14 @@ function vuelo(errorMs, semilla, tope) {
   c.fire();
   // vx en el momento de cada rebote: es el estado que modela la cadena del
   // presupuesto de legibilidad en test-generador.js.
+  // Se mide DESPUÉS del rebote, que es la velocidad con la que el palo sale hacia el
+  // próximo objetivo — la que modela la cadena. Medida antes es la entrante, y el
+  // rebote perfecto hace vx*1.06+0.4, así que 9 entrando permite 9,94 saliendo y el
+  // testigo quedaba flojo por casi una unidad.
   let vxRebote = 0;
   const origRebote = c.aplicarRebote.bind(c);
   c.aplicarRebote = d => {
-    vxRebote = Math.max(vxRebote, Math.abs(c.g.club.vx)); return origRebote(d); };
+    const r = origRebote(d); vxRebote = Math.max(vxRebote, Math.abs(c.g.club.vx)); return r; };
   const msPaso = M.F.STEP / M.F.VUELO;          // ms de reloj por paso de física
   const pulso = M.lcg(semilla ^ 0x5bf03635);    // el pulso del bot, aparte del escenario
   let pasos = 0, objAnt = null, pasoAnt = null, kToque = 0;
@@ -233,17 +237,6 @@ const peorPasos = Math.min(...impecables.map(r => r.pasos));
 const peorPts = Math.min(...impecables.map(r => r.pts));
 ck('el bot perfecto no muere: vuela hasta el corte', peorPasos >= 39000,
   'el peor de ' + impecables.length + ' vuelos impecables murió a los ' + peorPasos + ' pasos');
-ck('sin techo: el bot perfecto puntúa mucho más que el torpe',
-  peorPts > medianas[0] * 10,
-  'el peor impecable hizo ' + peorPts + ' contra ' + medianas[0] + ' del torpe');
-
-// El juego viejo se clavaba en ~5000 puntos y al intento 205 dejaba de mejorar. Que
-// el impecable puntúe mucho no descarta eso: hace falta ver que el score no se
-// SATURE con el largo del vuelo. Como el bot con error 0 no sortea nada, medio vuelo
-// con la misma semilla es exactamente el prefijo del vuelo entero, así que la
-// segunda mitad es la resta. Tiene que pagar más que la primera, porque el combo
-// sigue creciendo: un tope de score o de combo pasa las cuatro aserciones de arriba
-// y se cae acá.
 // El presupuesto de legibilidad de test-generador.js corre su cadena de rebotes a
 // vx=9 y no a VX_MAX. Eso vale sólo mientras la cadena de verdad no llegue a 9: si
 // llegara, el presupuesto estaría medido por debajo del peor caso y diría 848 ms
@@ -254,16 +247,33 @@ ck('la cadena nunca llega a la velocidad que supone el presupuesto de legibilida
   peorVxRebote < 9, 'el rebote más rápido fue a vx ' + peorVxRebote.toFixed(2) + ' y el ' +
   'presupuesto mide la cadena a 9');
 
-const mitad = vuelo(0, 777, TOPE / 2).pts;
-ck('sin plateau: la segunda mitad del vuelo paga más que la primera',
-  perfecto.pts - mitad > mitad,
-  'primera mitad ' + mitad + ', segunda ' + (perfecto.pts - mitad));
+// --- sin techo: el score no se satura con el largo del vuelo ---
+// El juego viejo se clavaba en ~5000 y al intento 205 dejaba de mejorar. Esto se mide
+// contra algo que crece con el largo del vuelo, no contra la mediana del peor perfil:
+// la versión anterior comparaba con `medianas[0] * 10`, y con los perfiles nuevos esa
+// vara cayó a ~8.400 contra 400.000 reales, así que saltaba cuando el TORPE puntuaba
+// de más y no cuando aparecía un techo.
+// Como el bot con error 0 no sortea nada, un vuelo más corto con la misma semilla es
+// exactamente el PREFIJO del vuelo entero: se puede comparar el mismo vuelo consigo
+// mismo a dos largos. Cuadruplicar el largo tiene que pagar más de 4×, o sea que el
+// score crezca más rápido que el tiempo — que es lo que hace un combo que no para de
+// subir. La vara es la relación de largos, no un número inventado.
+// Medido: sano 9,15×; con tope de combo 3,27×; con tope por rebote 3,14×.
+// Reemplaza a la aserción de plateau que estaba acá al lado: las dos medían esta misma
+// propiedad (una a 2× el largo, ésta a 4×) y morían con los mismos mutantes, así que
+// quedó la que tiene más palanca. Un tope tardío se nota MÁS acá, porque el vuelo
+// largo es el numerador.
+const cuarto = vuelo(0, 777, TOPE / 4).pts;
+ck('sin techo: cuadruplicar el vuelo paga más de 4× (el score no se satura)',
+  perfecto.pts > cuarto * 4,
+  'un cuarto de vuelo ' + cuarto + ', vuelo entero ' + perfecto.pts +
+  ' = ' + (perfecto.pts / Math.max(1, cuarto)).toFixed(2) + '×');
 
 console.log('destreza: ' + perfiles.map((e,i)=>e+'ms=' + medianas[i]).join('  ') +
   '  |  señal/ruido ' + (senal / Math.max(1, ruido)).toFixed(2) +
   ' (σ ' + Math.round(ruido) + ', ' + Math.min(...pts) + '..' + Math.max(...pts) + ' con entrada idéntica)' +
   '\n          peor de ' + impecables.length + ' impecables: ' + peorPasos + ' pasos y ' + peorPts +
-  ' pts; combo ×' + perfecto.combo + '; segunda mitad del vuelo ' +
-  ((perfecto.pts - mitad) / Math.max(1, mitad)).toFixed(1) + '× la primera');
+  ' pts; combo ×' + perfecto.combo + '; rebote más rápido a vx ' + peorVxRebote.toFixed(2) +
+  '; 4× el largo paga ' + (perfecto.pts / Math.max(1, cuarto)).toFixed(2) + '×');
 console.log(fail.length ? 'FALLAS:\n- ' + fail.join('\n- ') : 'TODO OK — rebote, combo, puntaje, variedad y destreza');
 process.exit(fail.length ? 1 : 0);

@@ -125,7 +125,16 @@
     sdga:   { w: 18, h: 30 },
   };
   const CLAVES = ['tree', 'cart', 'caddie', 'sdga'];
-  const AVANCE_MIN = 40; // distancia mínima adelante de est.x para que un plantado cuente como objetivo real
+  // Distancia mínima adelante de est.x para que un plantado cuente como objetivo real.
+  // NO se puede subir para dejar el plantado fuera del campo visible (194,5 px): la x
+  // del plantado la manda la física —es donde el arco cruza la cima— así que exigirle
+  // distancia no lo corre, lo descarta, y el vuelo se queda sin salida. Medido con
+  // 230: el perfil de 60 ms pasa de 0 sin-salida y 40.000 pasos a 41 sin-salida y
+  // 2.823 pasos, y el de 120 ms de 11.685 pasos a 1.753. El bot impecable no se
+  // entera (sus arcos son largos) y el test sintético de solvencia tampoco, porque su
+  // cadena arranca siempre con el rebote entero desde y=GY-60: los estados donde esto
+  // duele son los del rebote bueno, más bajos y más lentos.
+  const AVANCE_MIN = 40;
 
   // Congruencial lineal: aleatorio determinista, para que los tests reproduzcan
   // exactamente el mismo escenario a partir de una semilla.
@@ -208,13 +217,21 @@
     // aterrizaje está ocupado seguido: rechazar las posiciones ocupadas deja 260 de
     // 3388 estados sin salida y rompe la invariante de solvencia de arriba. Plantar
     // siempre y limpiar el vecino no la toca.
-    // Lo que se saca está a AVANCE_MIN o más por delante del palo y el jugador no lo
-    // vio nunca. En particular nunca es el obstáculo del que el palo viene rebotando:
-    // AVANCE_MIN (40) es mayor que el obstáculo más ancho (30) más los dos aires de
-    // 4 px, así que el de atrás no llega a solapar al plantado.
+    // Se marca INERTE y no se saca del array. Sacarlo se probó y se ve: el plantado
+    // cae a 40..190 px del palo, o sea adentro del campo visible (194,5 px), así que
+    // el jugador veía desaparecer un obstáculo mientras volaba hacia él — medido, 24
+    // de 58 sacados pasaban en pantalla, el más cercano a 20 px. Inerte se queda
+    // dibujado y sólo deja de ser pared.
+    // La marca es permanente y se decide acá, cuando se planta, así que no depende de
+    // cuál sea el objetivo VIGENTE: un vecino más alto que el objetivo viejo no vuelve
+    // a ser pared cuando buscarObjetivo() avanza y el palo todavía está saliendo de su
+    // caja. Una exención atada a g.objetivo sí dejaba ese agujero.
+    // Puede tocarle al obstáculo del que el palo acaba de rebotar: con un toque
+    // adelantado est.x queda atrás del objetivo, así que el viejo puede quedar a más de
+    // AVANCE_MIN y entrar en el solape. Es inocuo — ya rebotó, y ya tenía hit = true.
     // El 4 es el mismo aire que el test de choque del vuelo le da a los bordes.
-    for (let i = obs.length - 1; i >= 0; i--)
-      if (puesto.x < obs[i].x + obs[i].w + 4 && obs[i].x - 4 < puesto.x + puesto.w) obs.splice(i, 1);
+    for (const o of obs)
+      if (puesto.x < o.x + o.w + 4 && o.x - 4 < puesto.x + puesto.w) o.inerte = true;
     obs.push(puesto);
     obs.sort((a, b) => a.x - b.x);
     return 'planto';
