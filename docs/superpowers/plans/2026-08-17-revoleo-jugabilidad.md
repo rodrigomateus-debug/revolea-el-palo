@@ -932,11 +932,16 @@ git commit -m "Cámara alejada, arco predicho y anillo de timing"
    el desafío de timing y hace monótono el vuelo. Al calibrar, considerar bajar
    `IMPULSO` hasta que el arco perfecto quede por debajo del techo y la altura sea
    una consecuencia del acierto y no un valor fijo.
-2. **Si señal/ruido falla, el primer sospechoso NO son las ventanas.** Hasta que la
-   Task 8 saque el bucle de colisión, los obstáculos que no son el objetivo siguen
-   siendo paredes que parten el combo al azar — o sea la fuente de ruido que este
-   rediseño viene a eliminar, todavía activa. Reportar y parar antes de tocar
-   ventanas o impulso para compensarla.
+2. **Aviso retirado.** Acá decía que los obstáculos no-objetivo seguían siendo
+   paredes y contaminarían la medición de señal/ruido. **Se midió y es falso:** la
+   rama de choque corre 0 veces en 80 vuelos (ver el ítem 1 de la Task 8). No hay
+   esa fuente de ruido. Si señal/ruido falla, no la busques ahí.
+
+   Lo que sí queda como fuente de varianza legítima es el escenario aleatorio: qué
+   tipos de obstáculo toca y a qué separación, que es lo que la regla de variedad
+   convierte en decisión en vez de suerte. Si la señal/ruido no llega a 3, el
+   sospechoso son las ventanas de timing (demasiado anchas ⇒ todos aciertan igual)
+   o `factorVariedad` ahogando el score, en ese orden.
 
 El test que contesta «¿esto premia destreza?» con números en vez de opinión.
 
@@ -1075,12 +1080,24 @@ git commit -m "Bot de destreza: monotonía, señal/ruido y ausencia de techo"
 
 **Cuatro items que agregó la revisión de la Task 5** y que hay que borrar acá:
 
-1. **Los obstáculos que no son el objetivo siguen siendo paredes.** Chocarlos hace
-   `c.vx*=.22` y llama a `bail()`, que parte el combo de trucos. Eso es exactamente
-   la destrucción de combo por azar que este rediseño viene a sacar: el mismo árbol
-   es trampolín o pared según cuál eligió `alcanzables[0]`. Sacar el bucle de
-   colisión del vuelo por completo — la única interacción con un obstáculo es el
-   rebote. Con eso `bail()` y el `hit()` del vuelo quedan sin usar: borrarlos.
+1. **La rama de choque del vuelo no se ejecuta nunca: es código muerto.**
+   Ojo, la primera versión de este ítem decía que los obstáculos no-objetivo
+   «siguen siendo paredes que inyectan azar». **Eso era falso** y se midió:
+   instrumentada, la rama corre **0 veces** en 80 vuelos (40 sin tocar y 40 con
+   toques a destiempo). La razón es que `hit()` exige que el palo esté por debajo
+   del techo del obstáculo, y el único obstáculo en el que puede estar adentro es
+   el objetivo, que quedó exento; si pasa de largo sin tocar, llega al suelo antes
+   de alcanzar el siguiente.
+
+   Así que **no hay una fuente de ruido viva que sacar** — hay código inalcanzable
+   que borrar. Se saca igual por dos razones: es muerto, y si alguna vez se
+   disparara haría que el mismo árbol sea trampolín o pared según cuál eligió
+   `alcanzables[0]`, que contradice el diseño. Notar que «0 en 80 vuelos» es
+   medición y no demostración: el camino existe en teoría.
+
+   Sacar la rama de choque, y con ella `bail()` y `c.crashed` si quedan sin uso.
+   El truco AL RAS del mismo bucle **sí** puede dispararse (roce por encima de un
+   no-objetivo): decidir si se conserva, no borrarlo por arrastre.
 2. **`o.hit=true` en un rebote** hace que un trampolín en el que caíste se dibuje
    con la paleta de «golpeado». Si el bucle de colisión se va, revisar que `o.hit`
    siga significando algo o borrarlo también.

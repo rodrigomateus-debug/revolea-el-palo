@@ -769,6 +769,15 @@ class Component extends DCLogic{
           else{const q=this.quien(o);this.showFloat('¡LE DIO A '+q+'!');this.trick('SDGA '+q,150,.3)}
           g.shake=6;
           g.fx.push({x:c.x,y:c.y,t:20});
+          // El choque forkea el arco real (vx*=.22) por fuera de Motor.paso, así que
+          // el pasoObjetivo calculado antes apunta a un momento que ya no va a pasar.
+          // Sin recalcular, el toque siguiente se mide contra un arco inexistente —
+          // justo la mentira que el Step 5 vino a matar. Tras un choque alcanzables
+          // casi siempre vuelve vacío: el objetivo queda en null, el toque no hace
+          // nada y el vuelo muere en el suelo, que es lo coherente.
+          // Seguro dentro del for..of: acá c.vy=|vy|*.35+.6 es SIEMPRE > 0, así que
+          // rellenar corta por 'sin-salida' sin tocar g.obs.
+          this.buscarObjetivo();
         }
       }
       for(const p of (g.pel||[])){
@@ -787,6 +796,10 @@ class Component extends DCLogic{
           c.vy=-Math.abs(c.vy)*(hard?.28:.4);c.vx*=hard?.62:.82;
           c.spin=c.spin*.35+c.vx*.045+(Math.random()-.5)*.06;
           g.dust.push({x:c.x,y:GY,t:18});if(hard)g.dust.push({x:c.x-6,y:GY,t:14});
+          // Mismo motivo que en el choque: el pique forkea vy y vx por fuera de
+          // Motor.paso. Acá vy queda < 0, así que rellenar sí puede plantar — el
+          // pique devolvió altura y la invariante de solvencia le corresponde.
+          this.buscarObjetivo();
         }
         else{c.grounded=true;c.vy=0;c.vx*=.88;c.spin*=.6;
           if(Math.abs(c.vx)<.12||g.flyT>3600){

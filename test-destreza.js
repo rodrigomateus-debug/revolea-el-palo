@@ -82,11 +82,16 @@ ck('hay un método tocar()', /tocar\s*\(\s*\)\s*\{/.test(cuerpo));
 // angosto salía elegido como objetivo pero sin paso de llegada, y tocar() se iba
 // por el early return — ese obstáculo era intocable. Es la misma divergencia que la
 // Task 3 mató extrayendo cruzaCima, reintroducida un archivo más allá.
-// Se chequea sobre el código sin comentarios: `cima` aparece en la prosa.
+// Se prohíbe COMPARAR contra .cima, no leer el campo: la Task 6 necesita
+// g.objetivo.cima para poner el anillo de timing en pantalla, y un `!/\.cima/` a
+// secas la bloquearía. El peligro es re-escribir el TEST DE CRUCE, y todo test de
+// cruce necesita un operador de comparación pegado al campo, en cualquiera de los
+// dos órdenes. Se chequea sobre el código sin comentarios: `cima` va en la prosa.
 const codigo = cuerpo.replace(/\/\/[^\n]*/g, '');
 ck('el paso de llegada usa Motor.cruzaCima', /Motor\.cruzaCima\(/.test(codigo));
-ck('no quedó ningún cruce de cima escrito a mano', !/\.cima/.test(codigo),
-  'apareció .cima fuera de Motor.cruzaCima');
+ck('no quedó ningún cruce de cima escrito a mano',
+  !/[<>]=?\s*[\w.[\]]*\.cima|\.cima\s*[<>]/.test(codigo),
+  'hay una comparación contra .cima fuera de Motor.cruzaCima');
 
 console.log(fail.length ? 'FALLAS:\n- ' + fail.join('\n- ') : 'TODO OK — rebote, combo, puntaje y variedad');
 process.exit(fail.length ? 1 : 0);

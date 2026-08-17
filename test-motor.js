@@ -116,6 +116,16 @@ ck('loop corriendo en play', !!c.raf);
 // intro (el putt fallado) + espera a que pase a ready
 ck('fase ready tras la intro', until(c, () => c.g.phase === 'ready'), c.g.phase);
 
+// Escenario DETERMINISTA. newShot siembra con Math.random(), así que sin fijar la
+// semilla el vuelo de prueba es distinto en cada corrida: medido 2 de 20 veces el palo
+// se estrellaba contra un obstáculo que NO era el objetivo, buscarObjetivo devolvía
+// null y el vuelo terminaba en 1 rebote. Eso es el comportamiento correcto (un choque
+// contra una pared corta la cadena), pero hace irreproducibles las aserciones de la
+// cadena. Con la semilla fija el arco entero es determinista y se pueden exigir
+// números exactos. Se pisa después de la intro y antes de revolear.
+c.g.rand = Motor.lcg(20260817);
+c.g.obs = Motor.generar(c.g.rand, 430, 20000);
+
 // cargar y revolear
 c.begin();
 ck('fase charge', c.g.phase === 'charge', c.g.phase);
@@ -133,15 +143,47 @@ ck('fase fly', c.g.phase === 'fly', c.g.phase);
 // impulso perfecto devuelve la energía entera), así que sin corte el vuelo no
 // termina y la aserción de "el tiro terminó" de abajo no podría cumplirse.
 const REBOTES_A_JUGAR = 12;
+// Un paso de física equivale a STEP/VUELO ≈ 30,3 ms de reloj, así que el desfase sale
+// de la ventana misma: ceil(160/30,3)+1 = 7 pasos ≈ 212 ms, apenas pasada la
+// VENTANA_BUENO de 160, o sea raspón garantizado y justo en el borde. Se deriva de las
+// constantes y no se hardcodea para que la calibración de la Task 7 no lo deje del
+// lado de adentro de la ventana en silencio.
+const PASOS_TARDE = Math.ceil(Motor.F.VENTANA_BUENO / (Motor.F.STEP / Motor.F.VUELO)) + 1;
 let maxObs = 0, maxPel = 0, objSinPaso = 0, rebotes = 0, maxCombo = 1;
+let comboCadena = 0, comboAntesTarde = 0, comboTrasTarde = -1, comboRoto = 0;
 // se cuentan los rebotes que de verdad se resolvieron, no los toques: tocar() se
 // va por el early return si no hay objetivo y eso no es un rebote.
 const origReb = c.aplicarRebote.bind(c);
-c.aplicarRebote = d => { rebotes++; origReb(d); };
+c.aplicarRebote = d => { rebotes++; origReb(d);
+  // Invariante POR REBOTE, no por total: en la fase de cadena el toque va exacto en la
+  // llegada, o sea desfase 0, o sea perfecto, o sea combo === rebotes+1 después de cada
+  // uno. Un solo rebote que no sea perfecto la rompe. A diferencia de las cifras
+  // exactas de abajo, esta no se cuelga de la semilla.
+  if (rebotes <= REBOTES_A_JUGAR && c.g.combo !== rebotes + 1) comboRoto++; };
 for (let i = 0; i < 60000 && c.g.phase === 'fly'; i++) {
   VT += 1000 / 60; c.tick(VT);
-  if (rebotes < REBOTES_A_JUGAR && c.g.objetivo && c.g.pasoObjetivo != null &&
-      c.g.pasosVuelo >= c.g.pasoObjetivo) c.tocar();
+  const listo = c.g.objetivo && c.g.pasoObjetivo != null;
+  if (rebotes < REBOTES_A_JUGAR && listo && c.g.pasosVuelo >= c.g.pasoObjetivo) {
+    c.tocar();
+    // el combo justo al cerrar la cadena, antes de que el toque tarde lo parta
+    if (rebotes === REBOTES_A_JUGAR) comboCadena = c.g.combo;
+  }
+  // UN toque deliberadamente fuera de ventana, ya cerrada la cadena. Sin esto ningún
+  // test del motor en vivo ejercitaba 'bueno' ni 'raspon': tocando siempre en la
+  // llegada el desfase es 0 y sólo salen perfectos, así que el cableado de comboTras
+  // (partir el combo al medio) estaba cubierto sólo a nivel unitario en motor.js.
+  // Va ADELANTADO, no atrasado: resolverRebote usa Math.abs(desfase) (test-destreza
+  // fija que el signo no importa) y atrasarse es indeterminista — 7 pasos después de
+  // la llegada el palo puede haber tocado el suelo si la cima del objetivo era baja,
+  // y ahí el vuelo se termina sin que el toque llegue a ocurrir (medido: fallaba
+  // 2 de cada 10 corridas). Adelantado el palo está garantizadamente en el aire.
+  // El gate de rebotes va explícito: con sólo el `else if` esto se disparaba en el
+  // PRIMER arco (ahí pasoObjetivo-pasosVuelo también pasa por 7), metía un raspón en
+  // el eslabón 1 y dejaba la cadena en combo 12.
+  else if (rebotes >= REBOTES_A_JUGAR && comboTrasTarde < 0 && listo &&
+           c.g.pasoObjetivo - c.g.pasosVuelo === PASOS_TARDE) {
+    comboAntesTarde = c.g.combo; c.tocar(); comboTrasTarde = c.g.combo;
+  }
   // Un objetivo elegido SIEMPRE tiene que tener paso de llegada: si no, tocar() se
   // va por el early return y ese obstáculo es intocable.
   // HONESTIDAD: verificado a mano que esta aserción NO discrimina sobre este vuelo
@@ -162,13 +204,28 @@ ck('el tiro terminó', c.g.phase !== 'fly', 'quedó en ' + c.g.phase);
 ck('todo objetivo elegido tiene paso de llegada', objSinPaso === 0,
   objSinPaso + ' objetivos sin pasoObjetivo');
 // Encadena de verdad: no alcanza con que un rebote se resuelva. Se exige que el
-// vuelo llegue a los 12 rebotes pedidos (o sea que cada rebote deje un objetivo
-// nuevo alcanzable), que el combo suba (o sea que haya perfectos, o sea que
-// pasoDeLlegada apunte al momento real y no a uno cualquiera) y que se acredite.
-// Con timing al azar esto daba rebotes=1, combo=1: la aserción muerde.
-ck('la cadena encadena', rebotes === REBOTES_A_JUGAR, 'sólo ' + rebotes + ' rebotes');
-ck('el combo sube con la cadena', maxCombo > 1, 'combo max ' + maxCombo);
+// vuelo llegue a los 12 rebotes pedidos, o sea que cada rebote deje un objetivo
+// nuevo alcanzable. Con timing al azar esto daba rebotes=1: la aserción muerde.
+ck('la cadena encadena', rebotes >= REBOTES_A_JUGAR, 'sólo ' + rebotes + ' rebotes');
+// Tocando en la llegada el desfase es 0, así que los 12 tienen que salir perfectos y
+// el combo tiene que valer exactamente 12+1. `combo > 1` pasaba con UN solo perfecto
+// y 11 raspones; esto no: fija la cuenta entera. Es además la prueba de que
+// pasoDeLlegada apunta al momento real del arco y no a uno cualquiera.
+ck('los 12 rebotes de la cadena son perfectos', comboCadena === REBOTES_A_JUGAR + 1,
+  'combo al cerrar la cadena ' + comboCadena + ' (esperado ' + (REBOTES_A_JUGAR + 1) + ')');
+ck('cada rebote de la cadena deja el combo en rebotes+1', comboRoto === 0,
+  comboRoto + ' rebotes de la cadena no fueron perfectos');
 ck('la cadena acredita puntos', c.g.puntos > 0, 'puntos ' + c.g.puntos);
+// El toque tarde tiene que partir el combo al medio, redondeando para abajo y con
+// piso en 1: es comboTras(combo,'raspon') cableado de punta a punta. Se compara
+// contra el valor exacto, no contra "bajó": una implementación que lo mandara a 1
+// de una, o que le restara 1, pasaría un `<` y falla acá.
+ck('hubo un toque fuera de ventana de verdad', comboTrasTarde >= 0,
+  'nunca se disparó el toque tarde');
+ck('el toque fuera de ventana parte el combo al medio',
+  comboTrasTarde === Math.max(1, Math.floor(comboAntesTarde / 2)),
+  'de ' + comboAntesTarde + ' pasó a ' + comboTrasTarde +
+  ' (esperado ' + Math.max(1, Math.floor(comboAntesTarde / 2)) + ')');
 ck('g.obs no crece sin techo', maxObs < 200, 'pico ' + maxObs);
 ck('g.pel acotado (<40)', maxPel < 40, 'pico ' + maxPel);
 ck('fx/dust compactados', c.g.fx.length < 200 && c.g.dust.length < 200);
@@ -235,7 +292,11 @@ ck('hueco de 5 s no dispara catch-up', burst <= 4, burst + ' pasos');
 console.log('distancia del vuelo de prueba: ' + dist + ' m');
 console.log('picos: obs=' + maxObs + ' pel=' + maxPel);
 console.log('cadena de rebotes: ' + rebotes + ' rebotes, ' + c.g.puntos + ' puntos, combo max ' +
-  maxCombo + ', objetivos sin paso de llegada: ' + objSinPaso);
+  maxCombo + ', combo al cerrar la cadena ' + comboCadena +
+  ', objetivos sin paso de llegada: ' + objSinPaso);
+console.log('toque fuera de ventana (' + PASOS_TARDE + ' pasos adelantado = ' +
+  Math.round(PASOS_TARDE * (Motor.F.STEP / Motor.F.VUELO)) + ' ms de desfase): combo ' +
+  comboAntesTarde + ' -> ' + comboTrasTarde);
 console.log('escrituras de texto en el DOM: ' + stats.textWrites + ', de style: ' + stats.styleWrites);
 console.log('fillStyle asignados: ' + stats.fillStyleSets + ' / fillRect: ' + stats.fillRect);
 console.log(fail.length ? '\nFALLAS:\n- ' + fail.join('\n- ') : '\nTODO OK');
