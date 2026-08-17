@@ -166,6 +166,7 @@ function vuelo(errorMs, semilla, tope) {
   for (let i = 0; i < 30; i++) { adv(M.F.STEP); c.tick(now()); }
   c.g.manual = true; c.g.angle = 45; c.g.power = 1;
   c.fire();
+  const huecos0 = huecos;
   // vx en el momento de cada rebote: es el estado que modela la cadena del
   // presupuesto de legibilidad en test-generador.js.
   // Se mide DESPUÉS del rebote, que es la velocidad con la que el palo sale hacia el
@@ -196,8 +197,56 @@ function vuelo(errorMs, semilla, tope) {
   // que explotó a la mitad se mide como un vuelo corto y las cuatro aserciones
   // pasarían midiendo un juego roto.
   if (global.window.__loopErr) throw new Error('el loop explotó: ' + global.window.__loopErr);
-  return { pts: c.g.puntos, pasos: pasos, combo: c.g.combo, vxRebote: vxRebote };
+  return { pts: c.g.puntos, pasos: pasos, combo: c.g.combo, vxRebote: vxRebote,
+           huecos: huecos - huecos0 };
 }
+
+// Huecos del generador, contados sobre los vuelos que ya se corren. Es LA garantía
+// sobre la que se apoya todo el diseño: un vuelo tiene que terminar por error del
+// jugador y nunca porque el generador no dejó a dónde ir.
+// Se cuenta un 'sin-salida' SÓLO si el palo venía SUBIENDO (vy < 0) y de un rebote
+// contra un obstáculo, o sea si recuperó altura y aun así no había nada alcanzable:
+// ése es el caso que Motor.rellenar está contratado para que no pase.
+// Los dos finales que NO se cuentan, porque son el diseño y no un defecto:
+//  - vy >= 0: un raspón, el palo ya viene bajando. Es el error del jugador.
+//  - y >= GY-1: viene del pique en el suelo, no de un rebote. El palo ya toc  el piso
+//    (el vuelo ya estaba terminando) y ese rebotito no es "un rebote exitoso".
+// Contar cualquiera de los dos dejaría la aserción roja para siempre midiendo algo
+// correcto. Medido, la diferencia no es de detalle: sobre los mismos 100 vuelos el
+// pique aporta 100 y el rebote de verdad 27.
+// Va acá y no en test-generador.js porque su cadena sintética arranca siempre con el
+// rebote entero desde y=GY-60 y nunca modela los estados de media altura que dejan un
+// bueno o un raspón, que son justo donde aparecen los huecos: reportaba 0 de 7500 con
+// AVANCE_MIN en 230 mientras los vuelos de verdad se morían 41 veces.
+// El tercer caso excluido es GEOMÉTRICO y no un umbral de vx: si el tramo que BAJA del
+// arco no llega a cubrir AVANCE_MIN, no hay dónde plantar por construcción —todo
+// candidato tiene que estar a AVANCE_MIN o más— así que la precondición del contrato no
+// se cumple y el caso no es un incumplimiento. Se le pregunta a Motor.trayectoria, que
+// es el mismo predictor que usa rellenar, y sólo se le pide alcance horizontal: no se
+// re-escribe ningún test de cruce de cima.
+// El alcance se mide sobre TODO el tramo descendente, a propósito, aunque el punto más
+// lejano sea el impacto contra el suelo y ahí no se pueda plantar nada. La versión
+// ajustada —medir sólo mientras el arco está a la altura de la cima más baja (GY - 20)
+// o más arriba, que es donde un plantado puede ir— es más correcta en unidades y deja
+// los huecos en 0 con AVANCE_MIN en 40, pero MEDIDO también los deja en 0 con
+// AVANCE_MIN en 230: al subir la barra sube en paralelo la precondición, y la aserción
+// se vuelve ciega justo al caso que la motivó (un AVANCE_MIN más grande de lo que la
+// física puede entregar, que mata vuelos de jugadores sanos). Entre una aserción verde
+// y ciega y una que reporta 4 casos de más, se eligió la que reporta.
+const cubreElAvance = est => M.trayectoria(est, 1200)
+  .some(p => p.vy > 0 && p.x - est.x >= M.AVANCE_MIN);
+
+let huecos = 0, huecosPique = 0, huecosCortos = 0, vxHueco = Infinity;
+const rellenarReal = M.rellenar;
+M.rellenar = (obs, rand, est) => {
+  const r = rellenarReal(obs, rand, est);
+  if (r === 'sin-salida' && est.vy < 0) {
+    if (est.y >= M.F.GY - 1) huecosPique++;
+    else if (!cubreElAvance(est)) huecosCortos++;
+    else { huecos++; vxHueco = Math.min(vxHueco, Math.abs(est.vx)); }
+  }
+  return r;
+};
 
 const mediana = a => a.slice().sort((x,y)=>x-y)[a.length >> 1];
 // ms de error: de torpe a perfecto. Los perfiles tienen que caer en bandas de rebote
@@ -208,12 +257,54 @@ const mediana = a => a.slice().sort((x,y)=>x-y)[a.length >> 1];
 // arranca en ~166 ms. Con 200 ms se cruza VENTANA_BUENO y cada par adyacente difiere
 // en su mezcla de tipos de rebote.
 const perfiles = [200, 120, 60, 0];
-const medianas = perfiles.map(e => mediana(
-  Array.from({ length: 25 }, (_, i) => vuelo(e, 1000 + i * 37).pts)));
+const corridas = perfiles.map(e => Array.from({ length: 25 }, (_, i) => vuelo(e, 1000 + i * 37)));
+const medianas = corridas.map(rs => mediana(rs.map(r => r.pts)));
 
 ck('la destreza es monótona: menos error ⇒ más puntos',
   medianas.every((v, i) => i === 0 || v >= medianas[i-1]),
   perfiles.map((e,i)=>e+'ms='+medianas[i]).join('  '));
+
+// Se mide sobre los CUATRO perfiles y no sólo sobre el impecable: el hueco aparece
+// después de un rebote bueno, que es un rebote exitoso y no un error, y el bot con
+// error 0 no hace ninguno. La aserción de 'no muere' de más abajo corre sólo con error
+// 0, así que sin esto los perfiles ruidosos alimentan medianas y señal/ruido y nadie
+// mira si se murieron por culpa del generador.
+// Clavado en 4 EXACTO contra la semilla fija: si da menos falla, y si da más también.
+// Los 4 están medidos y caracterizados, y son finales causados por el JUGADOR y no
+// huecos del generador: un palo que viene de un rebote bueno con vx entre 0,36 y 0,39
+// —3,7% de VX_MAX, contra una mediana de cadena de 1,78— porque cada raspón le come
+// 35% de la velocidad horizontal. Su arco entero avanza 41 px, y esos 41 px los toca
+// recién en el impacto contra el suelo, donde no se puede plantar nada: las alturas de
+// cima, las únicas donde un plantado puede ir, quedan cortas por 1 a 4 px. O sea que no
+// hay plataforma alcanzable, y no porque el generador se la haya olvidado.
+// Las cuatro firmas, todas del perfil de 120 ms:
+//   vy=-2,81  vx=0,36  y=183   cortos por: tree 4, cart 1, caddie 2, sdga 2 px
+//   vy=-2,81  vx=0,39  y=207   cortos por: tree 5, cart 2, caddie 3, sdga 3 px
+//   vy=-2,81  vx=0,38  y=197   cortos por: tree 5, cart 1, caddie 3, sdga 3 px
+//   vy=-2,81  vx=0,37  y=182   cortos por: tree 3, cart 1, caddie 1, sdga 1 px
+// La igualdad exacta es deliberada: la semilla está fija y los cuatro casos están
+// documentados, así que un cambio para cualquiera de los dos lados tiene que forzar a un
+// humano a mirar. Sigue mordiendo donde importa: con AVANCE_MIN en 230 —que mata vuelos
+// de jugadores sanos— esto da 6 y la aserción cae, y el perfil de 60 ms pasa de 0 a 2
+// huecos, que es la señal de que se rompió una cadena sana. (Los 22 que este comentario
+// decía antes eran con la comparación vieja contra el borde del sprite; con la
+// comparación por cruce el mismo AVANCE_MIN 230 da 6. El margen es más finito, 6 contra
+// 4, pero el sentido es el que importa.)
+// POR QUÉ ESTÁ EN 4 Y NO EN 0: el predicado de exclusión podría medir el alcance sólo a
+// la altura de la cima más baja (GY - 20), que es más correcto en unidades y deja esto
+// en 0. Medido, así también da 0 con AVANCE_MIN en 230, donde mueren vuelos de jugadores
+// sanos: no distingue una cadena sana de una rota. No lo "limpies" a 0 sin volver a
+// medir las dos cosas.
+const HUECOS_CONOCIDOS = 4;
+const huecosPerfil = corridas.map(rs => rs.reduce((a, r) => a + r.huecos, 0));
+const huecosTotal = huecosPerfil.reduce((a, b) => a + b, 0);
+ck('los huecos del generador siguen siendo los ' + HUECOS_CONOCIDOS + ' conocidos',
+  huecosTotal === HUECOS_CONOCIDOS,
+  perfiles.map((e,i)=>e+'ms='+huecosPerfil[i]).join('  ') + ' = ' + huecosTotal +
+  ' huecos tras un rebote (esperados ' + HUECOS_CONOCIDOS + '; el vx más bajo fue ' +
+  (vxHueco === Infinity ? 'n/d' : vxHueco.toFixed(2)) +
+  '); no cuentan ' + huecosCortos + ' cuyo arco no cubre AVANCE_MIN (' + M.AVANCE_MIN +
+  ' px) ni ' + huecosPique + ' tras un pique en el suelo');
 
 // El ruido es la varianza del score con la MISMA entrada (error 0, sin jitter) y
 // distinto escenario: es lo que el jugador no controla. La señal es lo que separa
@@ -274,6 +365,9 @@ console.log('destreza: ' + perfiles.map((e,i)=>e+'ms=' + medianas[i]).join('  ')
   ' (σ ' + Math.round(ruido) + ', ' + Math.min(...pts) + '..' + Math.max(...pts) + ' con entrada idéntica)' +
   '\n          peor de ' + impecables.length + ' impecables: ' + peorPasos + ' pasos y ' + peorPts +
   ' pts; combo ×' + perfecto.combo + '; rebote más rápido a vx ' + peorVxRebote.toFixed(2) +
-  '; 4× el largo paga ' + (perfecto.pts / Math.max(1, cuarto)).toFixed(2) + '×');
+  '; 4× el largo paga ' + (perfecto.pts / Math.max(1, cuarto)).toFixed(2) + '×' +
+  '\n          huecos del generador: ' + huecosPerfil.reduce((a,b)=>a+b,0) +
+  ' (fuera del contrato: ' + huecosCortos + ' con el arco más corto que AVANCE_MIN, ' +
+  huecosPique + ' tras un pique)');
 console.log(fail.length ? 'FALLAS:\n- ' + fail.join('\n- ') : 'TODO OK — rebote, combo, puntaje, variedad y destreza');
 process.exit(fail.length ? 1 : 0);

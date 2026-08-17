@@ -180,9 +180,40 @@
   // obstáculo donde el arco cruza la altura de rebote. Random pero siempre
   // superable — sin esto el jugador pierde por un hueco que no controlaba.
   // Solo cuenta un cruce que quede adelante de `est.x` por al menos AVANCE_MIN.
-  // La invariante rige solo "desde un rebote que recuperó altura" (vy < 0): un
-  // raspón (vy >= 0, ya bajando) no recibe regalo — ahí no se planta nada, y que
-  // no haya salida es el error del jugador, no un defecto del generador.
+  // La invariante rige desde un rebote que recuperó altura (vy < 0) Y cuyo tramo
+  // descendente alcanza a cubrir AVANCE_MIN. Son DOS condiciones, no una:
+  // - un raspón (vy >= 0, ya bajando) no recibe regalo: ahí no se planta nada, y que
+  //   no haya salida es el error del jugador, no un defecto del generador;
+  // - si el tramo que baja del arco no llega a AVANCE_MIN, no hay DÓNDE plantar por
+  //   construcción — todo candidato tiene que estar a AVANCE_MIN o más para ser
+  //   alcanzable y legible — así que la invariante no puede cumplirse y no aplica.
+  // La segunda precondición faltaba y la promesa quedaba más grande que lo que el
+  // generador puede dar. No es un umbral de vx puesto a ojo: el caso se describe por
+  // geometría ("el tramo descendente no cubre AVANCE_MIN") y AVANCE_MIN se justificó
+  // solo, mucho antes de que apareciera este análisis.
+  //
+  // OJO — QUEDA UN HUECO CHICO Y DOCUMENTADO. Medido con el bot sobre 100 vuelos con
+  // error de timing (la aserción 'el generador nunca deja sin salida a un palo que
+  // recuperó altura' de test-destreza.js, que está ROJA a propósito y los reporta):
+  // 119 casos de 'sin-salida' con vy < 0, repartidos así:
+  //   95  del pique en el suelo — fuera del contrato, no es un rebote contra un
+  //       obstáculo (ver el comentario del pique en el vuelo);
+  //   20  los explica la precondición de arriba: el arco no cubre AVANCE_MIN;
+  //    4  quedan abiertos, y son el borde de la misma precondición.
+  // Los 4 son todos el mismo caso: rebote bueno (vy = -2,81) con vx entre 0,36 y 0,39,
+  // o sea 3,7% de VX_MAX — un palo al que sus propios raspones (cada uno le come 35%
+  // de vx) le dejaron nada para avanzar. Su tramo descendente llega a 41 px, apenas
+  // 1 px más que AVANCE_MIN, pero ese punto más lejano es el IMPACTO CONTRA EL SUELO
+  // (y=232) y ahí no se puede plantar: los cruces de cima, que son las alturas donde un
+  // plantado puede ir, quedan cortos por 1 a 4 px. O sea que el arco no alcanza a
+  // ninguna plataforma posible y el vuelo se termina — el error del jugador
+  // acumulándose, que es lo que el diseño dice que termina un vuelo, y no un lugar
+  // donde el generador podría haber puesto algo y no lo hizo.
+  // Se podría dejar en 0 midiendo la precondición sólo a la altura de la cima más baja,
+  // que es más correcto en unidades, pero medido eso también la deja en 0 con
+  // AVANCE_MIN en 230, donde sí mueren vuelos de jugadores sanos: al subir la barra sube
+  // en paralelo la precondición y la aserción se vuelve ciega al caso que la motivó.
+  // Se prefirió que reporte 4 de más antes que quedar verde y ciega.
   // Devuelve un string, no un boolean, porque hay tres desenlaces distintos que
   // el llamador necesita distinguir: 'ya-habia' (no hacía falta tocar nada, el
   // vuelo sigue), 'planto' (se agregó un objetivo, el vuelo sigue) y
@@ -200,7 +231,15 @@
       for (let i = 1; i < tr.length; i++) {
         if (tr[i].vy > 0 && tr[i - 1].y <= cima && tr[i].y >= cima) {
           const x = Math.round(tr[i].x - TIPOS[clave].w / 2);
-          if (x < est.x + AVANCE_MIN) continue;
+          // La distancia que se mide es est.x -> CRUCE, no est.x -> borde izquierdo del
+          // sprite. AVANCE_MIN existe para que el próximo contacto esté lo bastante
+          // adelante como para verlo y reaccionar, y el contacto pasa donde el arco
+          // cruza la cima: el borde izquierdo es una extensión de dibujo y no tiene
+          // nada que ver con el tiempo de reacción. Comparando el borde se le pedía
+          // media anchura de más (w/2 va de 5 a 13 px), o sea que la barra efectiva era
+          // 45..53 en vez de 40, y candidatos perfectamente buenos quedaban afuera por
+          // 0,2 a 7,9 px.
+          if (tr[i].x < est.x + AVANCE_MIN) continue;
           puesto = { t: clave, x: x, w: TIPOS[clave].w, h: TIPOS[clave].h, cima: cima };
           break;
         }
@@ -308,7 +347,8 @@
   const api = { F: F, acotar: acotar, metros: metros, encuadre: encuadre,
                 camObjetivo: camObjetivo, adelante: adelante,
                 paso: paso, trayectoria: trayectoria,
-                TIPOS: TIPOS, lcg: lcg, generar: generar, alcanzables: alcanzables,
+                TIPOS: TIPOS, AVANCE_MIN: AVANCE_MIN,
+                lcg: lcg, generar: generar, alcanzables: alcanzables,
                 cruzaCima: cruzaCima, rellenar: rellenar, avisoMs: avisoMs,
                 resolverRebote: resolverRebote, comboTras: comboTras, acreditar: acreditar,
                 factorVariedad: factorVariedad, IMPULSO: IMPULSO };

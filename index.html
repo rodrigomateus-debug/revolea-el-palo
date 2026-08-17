@@ -774,8 +774,14 @@ class Component extends DCLogic{
           c.spin=c.spin*.35+c.vx*.045+(Math.random()-.5)*.06;
           g.dust.push({x:c.x,y:GY,t:18});if(hard)g.dust.push({x:c.x-6,y:GY,t:14});
           // Mismo motivo que en el choque: el pique forkea vy y vx por fuera de
-          // Motor.paso. Acá vy queda < 0, así que rellenar sí puede plantar — el
-          // pique devolvió altura y la invariante de solvencia le corresponde.
+          // Motor.paso, así que hay que recalcular el objetivo. Acá vy queda < 0 y
+          // rellenar SÍ puede plantar, pero el pique NO es un rebote contra un
+          // obstáculo: queda fuera del contrato de solvencia. Que después de tocar el
+          // suelo no haya a dónde ir es un final legítimo, el vuelo ya se estaba
+          // terminando. Este comentario decía que "la invariante le corresponde" y era
+          // falso: medido, el pique aporta 100 de los 127 casos sin salida con vy < 0,
+          // así que tratarlo como incumplimiento dejaba la aserción del bot roja para
+          // siempre midiendo algo correcto.
           this.buscarObjetivo();
         }
         else{c.grounded=true;c.vy=0;c.vx*=.88;c.spin*=.6;
