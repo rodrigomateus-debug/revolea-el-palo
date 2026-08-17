@@ -694,8 +694,12 @@ Agregar estos métodos a la clase, justo antes de `endShot(kind)`:
   // uno: la invariante de solvencia evita perder por un hueco que no controlabas.
   buscarObjetivo(){const g=this.g,c=g.club;if(!c)return;
     const est={x:c.x,y:c.y,vx:c.vx,vy:c.vy};
-    // 'sin-salida' sólo puede pasar viniendo de un raspón: el palo baja y no
-    // alcanza nada. Se deja caer y el vuelo termina al tocar el suelo.
+    // Se ignora a propósito lo que devuelve rellenar: la decisión de terminar el
+    // vuelo sale de que alcanzables quede vacío, no del string. El string existe
+    // para que el test de la invariante pueda observar qué camino tomó — sin él no
+    // habría forma de verificar que a un raspón no se le regala salida.
+    // 'sin-salida' sólo pasa viniendo de un raspón: el palo baja, no alcanza nada,
+    // se deja caer y el vuelo termina al tocar el suelo.
     Motor.rellenar(g.obs,g.rand,est);
     const alc=Motor.alcanzables(g.obs,est);
     g.objetivo=alc.length?alc[0]:null;
