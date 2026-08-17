@@ -125,5 +125,16 @@ for (const vyRebote of [-7.4, -4.6]) {
 ck('todo alcanzable tiene aviso finito', infinitosEnAlcanzable === 0,
   infinitosEnAlcanzable + ' de ' + chequeadosAlcanzable + ' alcanzables dieron avisoMs Infinity');
 
+// --- predicción y realidad no pueden divergir ---
+// El anillo de timing sale del predictor. Si el vuelo en vivo integrara distinto,
+// el anillo apuntaría a un momento que no va a pasar.
+// Aserciones DE CABLEADO (regex sobre el fuente): garantizan que la integración
+// inline se fue y que quedó una sola llamada a Motor.paso, no que las dos físicas
+// coincidan numéricamente — eso es trivialmente cierto una vez que hay una sola.
+const cuerpoM = require('fs').readFileSync('Revolea el Palo.dc.html', 'utf8');
+ck('el vuelo en vivo usa Motor.paso', /Motor\.paso\(/.test(cuerpoM));
+ck('no quedó integración inline duplicada',
+  !/c\.vx=clamp\(c\.vx,-16,16\)/.test(cuerpoM) && !/c\.vy\+=G\*0\.44/.test(cuerpoM));
+
 console.log(fail.length ? 'FALLAS:\n- ' + fail.join('\n- ') : 'TODO OK — generador y trayectoria');
 process.exit(fail.length ? 1 : 0);

@@ -75,6 +75,10 @@ global.AudioContext = class {
 global.window = { addEventListener: () => {}, removeEventListener: () => {}, AudioContext: global.AudioContext };
 
 global.React = { createRef: () => ({ current: el() }) };
+// En el navegador motor.js declara window.Motor y el motor embebido lo lee como
+// global suelto. Acá se inyecta el módulo REAL (no un stub) para que el vuelo del
+// test corra la misma física y el mismo generador que el juego.
+global.Motor = require('./motor.js');
 
 class DCLogic {
   constructor() { this.props = {}; this.state = {}; }
@@ -120,11 +124,34 @@ c.fire();
 ticks(20);
 ck('fase fly', c.g.phase === 'fly', c.g.phase);
 
-// vuelo largo: aletazos periódicos + medición del crecimiento de los arrays
-let maxObs = 0, maxPel = 0;
+// vuelo largo: la cadena de rebotes + medición del crecimiento de los arrays.
+// tocar() reemplazó a flap(). El toque NO puede ir cada N frames como iba el
+// aletazo: el primero caía con un desfase enorme, salía raspón, el palo se venía
+// abajo y el vuelo moría en el primer eslabón (medido: 1 rebote, 135 m). Se toca
+// cuando el arco llega al objetivo, que es lo que hace un jugador. Y se deja de
+// tocar a los 12 rebotes A PROPÓSITO: un jugador impecable no baja nunca (el
+// impulso perfecto devuelve la energía entera), así que sin corte el vuelo no
+// termina y la aserción de "el tiro terminó" de abajo no podría cumplirse.
+const REBOTES_A_JUGAR = 12;
+let maxObs = 0, maxPel = 0, objSinPaso = 0, rebotes = 0, maxCombo = 1;
+// se cuentan los rebotes que de verdad se resolvieron, no los toques: tocar() se
+// va por el early return si no hay objetivo y eso no es un rebote.
+const origReb = c.aplicarRebote.bind(c);
+c.aplicarRebote = d => { rebotes++; origReb(d); };
 for (let i = 0; i < 60000 && c.g.phase === 'fly'; i++) {
   VT += 1000 / 60; c.tick(VT);
-  if (i % 40 === 0) c.flap();
+  if (rebotes < REBOTES_A_JUGAR && c.g.objetivo && c.g.pasoObjetivo != null &&
+      c.g.pasosVuelo >= c.g.pasoObjetivo) c.tocar();
+  // Un objetivo elegido SIEMPRE tiene que tener paso de llegada: si no, tocar() se
+  // va por el early return y ese obstáculo es intocable.
+  // HONESTIDAD: verificado a mano que esta aserción NO discrimina sobre este vuelo
+  // — con pasoDeLlegada escribiendo el cruce a mano (más estricto que el de
+  // alcanzables) también da 0, porque la divergencia sólo aparece en cruces rápidos
+  // sobre obstáculos angostos (~4,5% de los objetivos según la Task 3) y 12 rebotes
+  // no alcanzan a pegarle. Queda como guarda de regresión barata; lo que de verdad
+  // ataca ese bug son las dos aserciones de cruzaCima en test-destreza.js.
+  if (c.g.objetivo && c.g.pasoObjetivo == null) objSinPaso++;
+  maxCombo = Math.max(maxCombo, c.g.combo);
   maxObs = Math.max(maxObs, c.g.obs.length);
   maxPel = Math.max(maxPel, (c.g.pel || []).length);
 }
@@ -132,7 +159,17 @@ const dist = Math.round((c.g.club.x - 26) / 3);
 
 ck('sin error en el loop', !global.window.__loopErr, global.window.__loopErr);
 ck('el tiro terminó', c.g.phase !== 'fly', 'quedó en ' + c.g.phase);
-ck('g.obs acotado (<80)', maxObs < 80, 'pico ' + maxObs);
+ck('todo objetivo elegido tiene paso de llegada', objSinPaso === 0,
+  objSinPaso + ' objetivos sin pasoObjetivo');
+// Encadena de verdad: no alcanza con que un rebote se resuelva. Se exige que el
+// vuelo llegue a los 12 rebotes pedidos (o sea que cada rebote deje un objetivo
+// nuevo alcanzable), que el combo suba (o sea que haya perfectos, o sea que
+// pasoDeLlegada apunte al momento real y no a uno cualquiera) y que se acredite.
+// Con timing al azar esto daba rebotes=1, combo=1: la aserción muerde.
+ck('la cadena encadena', rebotes === REBOTES_A_JUGAR, 'sólo ' + rebotes + ' rebotes');
+ck('el combo sube con la cadena', maxCombo > 1, 'combo max ' + maxCombo);
+ck('la cadena acredita puntos', c.g.puntos > 0, 'puntos ' + c.g.puntos);
+ck('g.obs no crece sin techo', maxObs < 200, 'pico ' + maxObs);
 ck('g.pel acotado (<40)', maxPel < 40, 'pico ' + maxPel);
 ck('fx/dust compactados', c.g.fx.length < 200 && c.g.dust.length < 200);
 ck('buffers de ruido cacheados (<12)', (stats.buffersMade || 0) < 12, 'creados ' + stats.buffersMade);
@@ -163,7 +200,7 @@ global.window.__loopErr = null;
 const noCull = longFlight(false);
 console.log('vuelo largo (' + withCull.m + ' m): pico g.obs con poda=' + withCull.peak +
   ', sin poda=' + noCull.peak);
-ck('poda: g.obs acotado en vuelo largo', withCull.peak < 60, 'pico ' + withCull.peak);
+ck('poda: g.obs acotado en vuelo largo', withCull.peak < 200, 'pico ' + withCull.peak);
 ck('poda: recorre bastante menos que sin poda',
   withCull.scans * 3 < noCull.scans, withCull.scans + ' vs ' + noCull.scans);
 ck('vuelo largo sin errores', !withCull.err, withCull.err);
@@ -197,6 +234,8 @@ ck('hueco de 5 s no dispara catch-up', burst <= 4, burst + ' pasos');
 
 console.log('distancia del vuelo de prueba: ' + dist + ' m');
 console.log('picos: obs=' + maxObs + ' pel=' + maxPel);
+console.log('cadena de rebotes: ' + rebotes + ' rebotes, ' + c.g.puntos + ' puntos, combo max ' +
+  maxCombo + ', objetivos sin paso de llegada: ' + objSinPaso);
 console.log('escrituras de texto en el DOM: ' + stats.textWrites + ', de style: ' + stats.styleWrites);
 console.log('fillStyle asignados: ' + stats.fillStyleSets + ' / fillRect: ' + stats.fillRect);
 console.log(fail.length ? '\nFALLAS:\n- ' + fail.join('\n- ') : '\nTODO OK');

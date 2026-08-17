@@ -23,6 +23,9 @@ function load() {                                  // simula abrir la app de cer
   global.AudioContext = undefined;
   global.window = { addEventListener(){}, removeEventListener(){} };
   global.React = { createRef: () => ({ current: el() }) };
+  // en el navegador lo declara motor.js como window.Motor; el motor embebido lo lee
+  // como global suelto, así que acá se inyecta el módulo real.
+  global.Motor = require('./motor.js');
   class DCLogic { constructor(){ this.props = {}; this.state = {}; }
     setState(u, cb){ Object.assign(this.state, typeof u === 'function' ? u(this.state) : u);
       if (cb) cb(); if (this.componentDidUpdate) this.componentDidUpdate({}); }

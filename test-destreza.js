@@ -61,5 +61,32 @@ ck('sólo cuenta la racha final, no el historial',
   M.factorVariedad(['tree', 'cart'], 'tree') === 1,
   M.factorVariedad(['tree', 'cart'], 'tree'));
 
+// --- integración: el vuelo encadena rebotes y acredita ---
+// OJO: estas cinco son aserciones DE CABLEADO (regex sobre el fuente), no de
+// comportamiento. Prueban que el motor embebido llama al motor puro, no que la
+// cadena de rebotes funcione. La cobertura de comportamiento vive en test-motor.js
+// (que bootea el componente y corre el vuelo) y llega completa en la Task 7.
+const fs = require('fs');
+const cuerpo = /<script type="text\/x-dc"[^>]*>([\s\S]*?)<\/script>/
+  .exec(fs.readFileSync('Revolea el Palo.dc.html', 'utf8'))[1];
+ck('el motor usa Motor.resolverRebote', /Motor\.resolverRebote/.test(cuerpo));
+ck('el motor usa Motor.acreditar', /Motor\.acreditar/.test(cuerpo));
+ck('el motor usa Motor.rellenar', /Motor\.rellenar/.test(cuerpo));
+ck('ya no hay aletazos', !/g\.air/.test(cuerpo), 'quedó g.air en el motor');
+ck('hay un método tocar()', /tocar\s*\(\s*\)\s*\{/.test(cuerpo));
+
+// Un solo test de cruce de cima en todo el proyecto. pasoDeLlegada (de donde sale
+// el centro de la ventana de toque) tenía el cruce escrito a mano y MÁS ESTRICTO
+// que el de alcanzables: exigía que el paso cayera dentro del obstáculo en vez de
+// que el segmento lo solapara. Resultado: un cruce rápido sobre un obstáculo
+// angosto salía elegido como objetivo pero sin paso de llegada, y tocar() se iba
+// por el early return — ese obstáculo era intocable. Es la misma divergencia que la
+// Task 3 mató extrayendo cruzaCima, reintroducida un archivo más allá.
+// Se chequea sobre el código sin comentarios: `cima` aparece en la prosa.
+const codigo = cuerpo.replace(/\/\/[^\n]*/g, '');
+ck('el paso de llegada usa Motor.cruzaCima', /Motor\.cruzaCima\(/.test(codigo));
+ck('no quedó ningún cruce de cima escrito a mano', !/\.cima/.test(codigo),
+  'apareció .cima fuera de Motor.cruzaCima');
+
 console.log(fail.length ? 'FALLAS:\n- ' + fail.join('\n- ') : 'TODO OK — rebote, combo, puntaje y variedad');
 process.exit(fail.length ? 1 : 0);

@@ -480,16 +480,14 @@ class Component extends DCLogic{
     g.wind=this.props.viento===false?0:Math.round(rnd(-14,14));
     g.greenX=TEE+200*PXM;
     g.greens=[];for(let gm=200;gm<=1200;gm+=200)g.greens.push(TEE+gm*PXM);
-    const obs=[];let x=430;
-    while(x<4200){if(!this.inGreen(x)){const r=Math.random();
-      if(r<.32)obs.push({t:'tree',x:x,w:26,h:46});
-      else if(r<.5)obs.push({t:'cart',x:x,w:30,h:20});
-      else if(r<.68)obs.push({t:'caddie',x:x,w:16,h:30});
-      else obs.push({t:'sdga',x:x,w:18,h:30,who:SDGA_EMOJI[(Math.random()*8)|0]});}
-      x+=rnd(210,420);}
-    g.obs=obs;
+    g.rand=Motor.lcg((Math.random()*0x7fffffff)|0);
+    g.obs=Motor.generar(g.rand,430,20000);
+    g.combo=1;g.puntos=0;g.ultimosTipos=[];g.objetivo=null;g.xTramo=TEE;
     g.putted=false;
-    g.combo={pts:0,mult:1,items:[],bailed:false};
+    // Los trucos de vuelo (helicóptero, al ras, carritazo) son el combo VIEJO y
+    // siguen siendo adorno del HUD: g.combo ahora es el número de la cadena de
+    // rebotes. Vivían los dos en g.combo y el segundo pisaba al primero.
+    g.trucos={pts:0,mult:1,items:[],bailed:false};
     const pel=[],nut=[],zor=[];
     for(let px2=200;px2<4200;px2+=rnd(240,460))if(!this.inGreen(px2))pel.push({x:px2,y:rnd(62,124),ph:Math.random()*6});
     for(let nx2=300;nx2<4200;nx2+=rnd(380,700))if(!this.inGreen(nx2))nut.push({x:nx2,ph:Math.random()*6});
@@ -533,16 +531,16 @@ class Component extends DCLogic{
   nearGreen(x){const gs=this.g.greens||[this.g.greenX];let best=gs[0];
     for(const gx of gs)if(Math.abs(gx-x)<Math.abs(best-x))best=gx;return best}
 
-  trick(name,pts,mAdd){const g=this.g,cb=g.combo;if(!cb||cb.bailed)return;
+  trick(name,pts,mAdd){const g=this.g,cb=g.trucos;if(!cb||cb.bailed)return;
     cb.pts+=pts;cb.mult=Math.round((cb.mult+mAdd)*10)/10;
     const prev=cb.items[cb.items.length-1];
     if(prev&&prev.name===name)prev.n++;else cb.items.push({name:name,n:1});
     this.sfxTrick();
     if(cb.items.length>4)cb.items.shift();
     this.paintCombo();}
-  bail(){const g=this.g,cb=g.combo;if(!cb||cb.bailed)return;
+  bail(){const g=this.g,cb=g.trucos;if(!cb||cb.bailed)return;
     cb.bailed=true;cb.mult=Math.max(1,Math.round(cb.mult*5)/10);this.paintCombo();this.sfxBail();this.showFloat('¡SE CORTÓ EL COMBO!')}
-  paintCombo(){const cb=this.g.combo,el=this.rTricks.current,ml=this.rMult.current;if(!el||!ml)return;
+  paintCombo(){const cb=this.g.trucos,el=this.rTricks.current,ml=this.rMult.current;if(!el||!ml)return;
     if(!cb||!cb.items.length){this.txt(this.rTricks,'');this.op(this.rTricks,'0');this.op(this.rMult,'0');return}
     this.op(this.rTricks,'1');this.op(this.rMult,'1');
     this.txt(this.rTricks,cb.items.map(i=>i.name+(i.n>1?' ×'+i.n:'')).join('  ·  '));
@@ -552,24 +550,79 @@ class Component extends DCLogic{
   launch(){
     const g=this.g,a=g.angle*Math.PI/180,v=5.4+(g.locked*(g.perfect?1.12:1))*8.6;
     g.club={x:TEE+8,y:GY-44,vx:Math.cos(a)*v,vy:-Math.sin(a)*v,rot:-a,
-      spin:Math.max(.22,.19+g.locked*.24),grounded:false,trail:[],lastFlap:this.now()+120};
-    g.phase='fly';g.flyT=0;g.mult=1;g.rageT=240;g.air=3;
-    this.txt(this.rHint,'¡Tocá la pantalla para que el palo planee!');g.fx.push({x:TEE+14,y:GY-42,t:20});g.shake=7;this.sfxLaunch();
+      spin:Math.max(.22,.19+g.locked*.24),grounded:false,trail:[]};
+    g.phase='fly';g.flyT=0;g.pasosVuelo=0;g.mult=1;g.rageT=240;
+    this.txt(this.rHint,'Tocá justo cuando llegue');g.fx.push({x:TEE+14,y:GY-42,t:20});g.shake=7;this.sfxLaunch();
     if(g.perfect)this.showFloat('¡PERFECTO!');
     this.op(this.rMetros,'1');
+    this.buscarObjetivo();
   }
+  // El objetivo es el primer obstáculo que el arco actual cruza a la altura de su
+  // cima. Se recalcula tras cada rebote, y si no hay ninguno el generador planta
+  // uno: la invariante de solvencia evita perder por un hueco que no controlabas.
+  buscarObjetivo(){const g=this.g,c=g.club;if(!c)return;
+    const est={x:c.x,y:c.y,vx:c.vx,vy:c.vy};
+    // Se ignora a propósito lo que devuelve rellenar: la decisión de terminar el
+    // vuelo sale de que alcanzables quede vacío, no del string. El string existe
+    // para que el test de la invariante pueda observar qué camino tomó — sin él no
+    // habría forma de verificar que a un raspón no se le regala salida.
+    // 'sin-salida' sólo pasa viniendo de un raspón: el palo baja, no alcanza nada,
+    // se deja caer y el vuelo termina al tocar el suelo.
+    Motor.rellenar(g.obs,g.rand,est);
+    const alc=Motor.alcanzables(g.obs,est);
+    g.objetivo=alc.length?alc[0]:null;
+    g.pasoObjetivo=g.objetivo?this.pasoDeLlegada(est,g.objetivo):null;}
+
+  // En qué paso de física el arco llega a la cima del objetivo. De acá sale el
+  // centro de la ventana de toque. El valor es relativo al paso actual del vuelo.
+  // Usa Motor.cruzaCima, el MISMO test que alcanzables: escrito a mano quedaba más
+  // estricto (exigía que el paso cayera dentro del obstáculo en vez de que el
+  // segmento lo solapara) y un cruce rápido sobre un obstáculo angosto salía
+  // elegido como objetivo pero sin paso de llegada, así que tocar() no hacía nada.
+  // Es la misma divergencia que la Task 3 mató extrayendo cruzaCima.
+  pasoDeLlegada(est,o){const tr=Motor.trayectoria(est,1200);
+    for(let i=1;i<tr.length;i++)
+      if(Motor.cruzaCima(tr[i-1],tr[i],o))return (this.g.pasosVuelo||0)+i;
+    return null;}
+
+  // Toque del jugador durante el vuelo.
+  tocar(){const g=this.g,c=g.club;
+    if(!c||g.phase!=='fly'||!g.objetivo||g.pasoObjetivo==null)return;
+    const desfase=(g.pasosVuelo-g.pasoObjetivo)*(Motor.F.STEP/Motor.F.VUELO);
+    this.aplicarRebote(desfase);}
+
+  aplicarRebote(desfaseMs){const g=this.g,c=g.club,o=g.objetivo;
+    const r=Motor.resolverRebote({x:c.x,y:c.y,vx:c.vx,vy:c.vy},desfaseMs);
+    // se acredita con el combo vigente ANTES de aplicar el resultado
+    const tramo=Motor.metros(c.x)-Motor.metros(g.xTramo);
+    const factor=Motor.factorVariedad(g.ultimosTipos,o?o.t:'');
+    g.puntos+=Math.round(Motor.acreditar(g.combo,tramo)*factor);
+    g.xTramo=c.x;
+    g.combo=Motor.comboTras(g.combo,r.tipo);
+    c.vy=r.vy;c.vx=r.vx;c.grounded=false;
+    if(o){g.ultimosTipos.push(o.t);if(g.ultimosTipos.length>4)g.ultimosTipos.shift();
+      o.hit=true;g.fx.push({x:c.x,y:c.y,t:16});}
+    if(r.tipo==='perfecto'){this.sfxTrick();this.showFloat('+'+g.puntos+'  ×'+g.combo)}
+    else if(r.tipo==='raspon'){this.sfxBail();this.showFloat('¡RASPÓN!')}
+    else this.sfxLand();
+    g.shake=r.tipo==='perfecto'?4:6;
+    this.buscarObjetivo();}
+
   endShot(kind){
     const g=this.g;g.phase='done';
     const m=Math.round(Math.max(0,(g.club.x-TEE)/PXM));
-    const dx=Math.abs(g.club.x-this.nearGreen(g.club.x)),cb=g.combo;
+    const dx=Math.abs(g.club.x-this.nearGreen(g.club.x)),cb=g.trucos;
+    // Los ×N salieron de las etiquetas: el puntaje nuevo es puntos de rebote más el
+    // último tramo, y ni el green ni los trucos ni la suelta lo multiplican. Dejar
+    // los ×N escritos era mentirle al jugador sobre de dónde salió su score.
     let gMult=1,zona='Cayó en el rough';
     if(kind==='bunker'){zona='Enterrado en el bunker'}
-    else if(dx<=10){gMult=5;zona='¡LA EMBOCÓ EN EL HOYO! ×5'}
-    else if(dx<=34){gMult=3;zona='¡CLAVADA JUNTO AL PALO! ×3'}
-    else if(dx<=85){gMult=2;zona='Anillo del medio ×2'}
-    else if(dx<=150){gMult=1.5;zona='Pisó el green ×1.5'}
-    const perf=g.perfect?1.1:1;
-    let shotPts=Math.round((m+cb.pts)*cb.mult*gMult*perf);
+    else if(dx<=10){gMult=5;zona='¡LA EMBOCÓ EN EL HOYO!'}
+    else if(dx<=34){gMult=3;zona='¡CLAVADA JUNTO AL PALO!'}
+    else if(dx<=85){gMult=2;zona='Anillo del medio'}
+    else if(dx<=150){gMult=1.5;zona='Pisó el green'}
+    const tramo=Motor.metros(g.club.x)-Motor.metros(g.xTramo);
+    let shotPts=g.puntos+Motor.acreditar(g.combo,tramo);
     if(kind==='bunker')shotPts=Math.round(shotPts/2);
     if(gMult>=5)this.sfxHole();else if(gMult>1)this.sfxGreen();else this.sfxLand();
     const bails=this.state.bails+(cb.bailed?1:0);
@@ -587,10 +640,8 @@ class Component extends DCLogic{
     else if(shotPts<9000)tag='TREMENDO';
     else tag='HISTÓRICO';
     const parts=[m+' m'];
-    if(cb.pts)parts.push('+'+cb.pts+' trucos');
-    if(cb.mult>1)parts.push('combo ×'+cb.mult.toFixed(1));
-    if(gMult>1)parts.push('green ×'+gMult);
-    if(g.perfect)parts.push('suelta ×1.1');
+    if(g.puntos)parts.push('+'+g.puntos+' de rebotes');
+    if(g.combo>1)parts.push('combo ×'+g.combo);
     if(kind==='bunker')parts.push('bunker ÷2');
     if(g.putted)parts.push('putt final');
     if(clean)parts.push('ronda limpia +500');
@@ -625,22 +676,16 @@ class Component extends DCLogic{
   firePutt(){const g=this.g,c=g.club;if(!c)return;
     const ng=this.nearGreen(c.x),dir=ng-c.x>=0?1:-1,a=g.angle*Math.PI/180,v=1.4+g.power*4.6;
     c.vx=dir*Math.cos(a)*v;c.vy=-Math.sin(a)*v;c.grounded=false;c.crashed=false;c.spin=dir*.18;
-    g.putted=true;g.phase='fly';g.flyT=0;g.air=0;g.fx.push({x:c.x,y:c.y,t:14});
+    // sin objetivo: el putt es un tiro raso al hoyo, no un eslabón de la cadena.
+    // Si quedaba el objetivo del vuelo anterior, tocar() resolvía contra un
+    // pasoObjetivo viejísimo y regalaba un raspón.
+    g.putted=true;g.phase='fly';g.flyT=0;g.objetivo=null;g.fx.push({x:c.x,y:c.y,t:14});
     this.txt(this.rHint,'A ver si la clavás…');}
 
   onDown=e=>{const g=this.g;
     if(g&&g.phase==='putt'){g.phase='puttcharge';g.t0=this.now();g.manual=false;this.y0=e.clientY;return}
-    if(g&&g.phase==='fly'&&g.club&&!g.club.crashed&&!g.club.grounded){this.flap();return}
+    if(g&&g.phase==='fly'&&g.club&&!g.club.grounded){this.tocar();return}
     this.y0=e.clientY;this.begin()}
-  flap(){const g=this.g,c=g.club,n=this.now();if(!c)return;
-    if(n-(c.lastFlap||0)<210)return;
-    if(g.air<=0){if(!c.noAir){c.noAir=true;this.showFloat('¡SIN AIRE!')}return}
-    c.lastFlap=n;g.air--;this.sfxFlap();
-    c.vy=Math.min(c.vy,0)-1.7;c.spin=Math.min(.42,c.spin+.06);
-    g.fx.push({x:c.x-10,y:c.y+4,t:12});
-    g.helpers.push({x:c.x-16,y:c.y-2,cam0:g.cam,k:HELPER_KEYS[(Math.random()*3)|0],t:0,dir:Math.random()<.5?-1:1});
-    if(g.helpers.length>8)g.helpers.shift();
-    this.txt(this.rHint,g.air>0?('Aletazos que te quedan: '+g.air):'Se quedó sin aire. A esquivar de garrón.')}
   onMove=e=>{const g=this.g;if(!g||(g.phase!=='charge'&&g.phase!=='puttcharge')||this.y0==null)return;
     const d=this.y0-e.clientY;if(Math.abs(d)>6)g.manual=true;
     if(g.manual)g.angle=clamp(45+d*.3,15,70)}
@@ -681,16 +726,14 @@ class Component extends DCLogic{
       g.acc=(g.acc||0)+VUELO;
       const c=g.club;
       if(g.acc>=1){g.acc-=1;g.flyT++;
-      const sp=Math.hypot(c.vx,c.vy),drag=1-Math.min(.007,0.0008+sp*0.0004);
-      c.vy+=G*0.44;c.vx+=g.wind*0.0009;
-      if(!c.grounded){c.vx*=drag;c.vy*=drag;}
-      c.vx=clamp(c.vx,-16,16);
-      c.x+=c.vx;c.y+=c.vy;
-      if(c.y<50){c.y=50;if(c.vy<0)c.vy=.5;
-        // Antes acá iba g.air=Math.min(g.air,1). El palo sale a y=188 y el techo
-        // está en y=50, así que TODO tiro lo tocaba y te comía 2 aletazos de una
-        // sin que tocaras la pantalla. El techo ya castiga cortando la subida.
-        if(!c.roof){c.roof=true;this.showFloat('¡ASTRONAUTA!');this.trick('ASTRONAUTA',100,.2)}}
+      g.pasosVuelo=(g.pasosVuelo||0)+1;
+      // Una sola física: el vuelo en vivo usa el mismo paso que la predicción, así
+      // el anillo de timing no puede apuntar a un momento que no va a pasar.
+      // Motor.paso ya clampea el techo (F.TECHO), así que el if(c.y<50) se fue.
+      const e=Motor.paso({x:c.x,y:c.y,vx:c.vx,vy:c.vy});
+      c.x=e.x;c.y=e.y;c.vx=e.vx;c.vy=e.vy;
+      // sp lo sigue usando el giro de abajo; es lo único que sobrevive del bloque.
+      const sp=Math.hypot(c.vx,c.vy);
       if(!c.grounded){
         // el palo tumbea cabeza-pesada: gira más rápido en la subida, se acomoda al caer
         c.spin+=(0.13+Math.min(.14,sp*0.012)-c.spin)*0.02;
@@ -709,6 +752,13 @@ class Component extends DCLogic{
         // resto también. Antes se recorría el array completo en cada frame.
         if(c.x<o.x-30)break;
         if(o.hit)continue;
+        // El objetivo es plataforma de rebote, no pared. Sin esto el choque se
+        // resolvía en el MISMO paso de física en que el palo cruza la cima, o sea
+        // antes de que el jugador pudiera tocar: le comía el 65% de vx cada vez
+        // (medido: 1,11 -> 0,29 -> 0,13 y el vuelo muerto al tercer eslabón) y
+        // dejaba inalcanzable la mitad tardía de la ventana de perfecto, que es
+        // simétrica en resolverRebote. El resto de los obstáculos sigue chocando.
+        if(o===g.objetivo)continue;
         if(!o.near&&!this.hit(o,c)&&c.x>o.x-8&&c.x<o.x+o.w+8&&c.y<GY-o.h&&c.y>GY-o.h-20){o.near=true;this.trick('AL RAS',50,.2)}
         if(this.hit(o,c)){
           o.hit=true;
@@ -716,7 +766,7 @@ class Component extends DCLogic{
           if(o.t==='tree'){this.showFloat('¡CONTRA EL ÁRBOL!');this.bail()}
           else if(o.t==='cart'){this.showFloat('¡LE DIO AL CARRITO!');this.trick('CARRITAZO',80,.2)}
           else if(o.t==='caddie'){this.showFloat('¡PERDÓN, CADDIE!');this.bail()}
-          else{this.showFloat('¡LE DIO A '+o.who+'!');this.trick('SDGA '+o.who,150,.3)}
+          else{const q=this.quien(o);this.showFloat('¡LE DIO A '+q+'!');this.trick('SDGA '+q,150,.3)}
           g.shake=6;
           g.fx.push({x:c.x,y:c.y,t:20});
         }
@@ -746,21 +796,18 @@ class Component extends DCLogic{
           }}
       }
       }
+      // Un solo generador. Esto sembraba a mano y sin `cima`, así que un vuelo que
+      // pasara los 20.000 px sembrados por Motor.generar recibía obstáculos que
+      // cruzaCima nunca podía alcanzar: la cadena de rebotes se cortaba sola.
       const lastO=g.obs.length?g.obs[g.obs.length-1].x:0;
-      if(lastO-c.x<900){let nx=lastO+rnd(230,430);
-        for(let k=0;k<4;k++){if(!this.inGreen(nx)){const r=Math.random();
-          if(r<.34)g.obs.push({t:'tree',x:nx,w:26,h:46});
-          else if(r<.52)g.obs.push({t:'cart',x:nx,w:30,h:20});
-          else if(r<.7)g.obs.push({t:'caddie',x:nx,w:16,h:30});
-          else g.obs.push({t:'sdga',x:nx,w:18,h:30,who:SDGA_EMOJI[(Math.random()*8)|0]});}
-          nx+=rnd(230,430);}}
+      if(lastO-c.x<900)for(const o of Motor.generar(g.rand,lastO+90,lastO+2000))g.obs.push(o);
       // El cartel de distancia y el contador de metros cambiaban de texto en cada
       // frame, y cada escritura invalida estilo y layout. hudT cuenta pasos de
       // lógica: 20 Hz para los metros (el palo no avanza más rápido que eso por
       // el slomo) y 10 Hz para el cartel. Se lee igual y el layout descansa.
       g.hudT=(g.hudT||0)+1;
       if(g.club&&!g.club.grounded&&g.hudT%6===0){const d=(this.nearGreen(c.x)-c.x)/PXM;
-        this.txt(this.rHint,(d>0?'Green a '+Math.round(d)+' m':'Green pasado')+' · aletazos: '+g.air);}
+        this.txt(this.rHint,(d>0?'Green a '+Math.round(d)+' m':'Green pasado')+' · Combo ×'+g.combo);}
       g.cam+=((Math.max(0,c.x-48))-g.cam)*.09;
       if(g.hudT%3===0)this.txt(this.rMetros,Math.round(Math.max(0,(c.x-TEE)/PXM))+' M');
       this.cull(g.obs,g.cam-160);
@@ -787,6 +834,12 @@ class Component extends DCLogic{
         let n=1;while(rx+n<row.length&&a.p[row[rx+n]]===col)n++;
         this.px(x0+rx*s,y0+ry*s,s*n,s,col);rx+=n}}}
   get HOLE(){return TEE+62}
+  // Motor.generar y Motor.rellenar no saben de emojis, así que un obstáculo 'sdga'
+  // llega sin `who` y fillText(undefined) dibujaba literalmente "undefined". Se
+  // deriva de la x (determinista: en draw() un Math.random parpadearía por frame) y
+  // se memoiza. Va acá porque los dos lectores —draw() y el cartel del choque—
+  // pasan por este método.
+  quien(o){return o.who||(o.who=SDGA_EMOJI[Math.abs(o.x|0)%SDGA_EMOJI.length])}
 
   draw(){
     const cv=this.cv.current;if(!cv)return;
@@ -859,7 +912,7 @@ class Component extends DCLogic{
       else{this.px(ox+4,GY-30,11,10,'#E8B48C');this.px(ox+2,GY-20,15,13,o.hit?'#BC4B3C':'#6FAE87');
         this.px(ox+4,GY-7,4,7,'#14402A');this.px(ox+10,GY-7,4,7,'#14402A');
         if(this._font!=='12px serif'){this._font='12px serif';ctx.font='12px serif';ctx.textAlign='center'}
-        this.fs('#14402A');ctx.fillText(o.who,ox+9,GY-33)}}
+        this.fs('#14402A');ctx.fillText(this.quien(o),ox+9,GY-33)}}
     const mx=TEE-16-cam,my=GY-MH,t=this.now()-g.t0;
     if(g.phase==='intro'){
       // putt: el palo va y viene como péndulo, golpea a los 950ms y sigue cortito
@@ -901,9 +954,6 @@ class Component extends DCLogic{
       const len=18+g.power*(R-18);
       for(let i=6;i<len;i+=4)this.px(ox+Math.cos(a)*i,oy-Math.sin(a)*i,2,2,'rgba(244,238,218,.9)');
       this.px(ox+Math.cos(a)*R,oy-Math.sin(a)*R,4,4,'#E8C34A');
-    }
-    if(g.phase==='fly'){
-      for(let i=0;i<3;i++)this.px(W/2-6+i*6,44,4,4,i<g.air?'#E8C34A':'rgba(244,238,218,.22)');
     }
     for(const hp of (g.helpers||[])){hp.t++;const hx=hp.x-hp.cam0-(cam-hp.cam0)*0.18;if(hx<-30||hx>W+30)continue;
       const k=Math.min(1,hp.t/18),ease=1-(1-k)*(1-k);
