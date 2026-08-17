@@ -36,6 +36,18 @@ ck('el raspón es proporcional a la velocidad entrante, no un piso fijo',
   raspLento.vy !== raspRapido.vy && raspLento.vx !== raspRapido.vx,
   raspLento.vy + '/' + raspLento.vx + ' vs ' + raspRapido.vy + '/' + raspRapido.vx);
 
+// El arco del rebote perfecto tiene que quedar ABAJO del techo. Si lo clava, el
+// excedente se descarta, todos los arcos de la cadena salen idénticos y la altura
+// deja de ser consecuencia del acierto (con IMPULSO en 7.4 clavaban 165 de 165).
+// El apex depende de vx por el drag: un palo LENTO frena menos y sube más, así que
+// el peor caso no es VX_MAX sino la velocidad de régimen de la cadena, vx≈2,2. Se
+// mide desde la cima más alta (el árbol, h=46), que es la que deja menos aire.
+const apexPerfecto = Math.min(...[1, 2.2, 5, M.F.VX_MAX].map(vx => Math.min(...M.trayectoria(
+  { x: 300, y: M.F.GY - 46, vx: vx, vy: M.resolverRebote({ vx: vx, vy: 1 }, 0).vy }, 600
+).map(p => p.y))));
+ck('el arco perfecto no clava el techo', apexPerfecto > M.F.TECHO + 5,
+  'apex ' + apexPerfecto.toFixed(1) + ' con el techo en ' + M.F.TECHO);
+
 // --- combo ---
 ck('perfecto sube el combo', M.comboTras(7, 'perfecto') === 8);
 ck('bueno lo mantiene', M.comboTras(7, 'bueno') === 7);
@@ -154,6 +166,12 @@ function vuelo(errorMs, semilla, tope) {
   for (let i = 0; i < 30; i++) { adv(M.F.STEP); c.tick(now()); }
   c.g.manual = true; c.g.angle = 45; c.g.power = 1;
   c.fire();
+  // vx en el momento de cada rebote: es el estado que modela la cadena del
+  // presupuesto de legibilidad en test-generador.js.
+  let vxRebote = 0;
+  const origRebote = c.aplicarRebote.bind(c);
+  c.aplicarRebote = d => {
+    vxRebote = Math.max(vxRebote, Math.abs(c.g.club.vx)); return origRebote(d); };
   const msPaso = M.F.STEP / M.F.VUELO;          // ms de reloj por paso de física
   const pulso = M.lcg(semilla ^ 0x5bf03635);    // el pulso del bot, aparte del escenario
   let pasos = 0, objAnt = null, pasoAnt = null, kToque = 0;
@@ -174,11 +192,18 @@ function vuelo(errorMs, semilla, tope) {
   // que explotó a la mitad se mide como un vuelo corto y las cuatro aserciones
   // pasarían midiendo un juego roto.
   if (global.window.__loopErr) throw new Error('el loop explotó: ' + global.window.__loopErr);
-  return { pts: c.g.puntos, pasos: pasos, combo: c.g.combo };
+  return { pts: c.g.puntos, pasos: pasos, combo: c.g.combo, vxRebote: vxRebote };
 }
 
 const mediana = a => a.slice().sort((x,y)=>x-y)[a.length >> 1];
-const perfiles = [120, 60, 20, 0];   // ms de error: de torpe a perfecto
+// ms de error: de torpe a perfecto. Los perfiles tienen que caer en bandas de rebote
+// DISTINTAS, si no la curva no mide destreza. Con [120, 60, 20, 0] los de 20 y 0
+// daban los dos 100% de rebotes perfectos —±20 ms redondea a ±1 paso de física, o
+// sea ±30,3 ms, que entra en VENTANA_PERFECTO (60)— así que ese par comparaba ruido
+// de geometría y ninguno de los cuatro llegaba nunca a la banda de raspón, que
+// arranca en ~166 ms. Con 200 ms se cruza VENTANA_BUENO y cada par adyacente difiere
+// en su mezcla de tipos de rebote.
+const perfiles = [200, 120, 60, 0];
 const medianas = perfiles.map(e => mediana(
   Array.from({ length: 25 }, (_, i) => vuelo(e, 1000 + i * 37).pts)));
 
@@ -219,6 +244,16 @@ ck('sin techo: el bot perfecto puntúa mucho más que el torpe',
 // segunda mitad es la resta. Tiene que pagar más que la primera, porque el combo
 // sigue creciendo: un tope de score o de combo pasa las cuatro aserciones de arriba
 // y se cae acá.
+// El presupuesto de legibilidad de test-generador.js corre su cadena de rebotes a
+// vx=9 y no a VX_MAX. Eso vale sólo mientras la cadena de verdad no llegue a 9: si
+// llegara, el presupuesto estaría medido por debajo del peor caso y diría 848 ms
+// donde el jugador ve 758. Acá se mide con el bot, que es el único que corre cadenas
+// largas de verdad. Medido: el peor rebote de los 41 vuelos va a 6,95.
+const peorVxRebote = Math.max(...impecables.map(r => r.vxRebote));
+ck('la cadena nunca llega a la velocidad que supone el presupuesto de legibilidad',
+  peorVxRebote < 9, 'el rebote más rápido fue a vx ' + peorVxRebote.toFixed(2) + ' y el ' +
+  'presupuesto mide la cadena a 9');
+
 const mitad = vuelo(0, 777, TOPE / 2).pts;
 ck('sin plateau: la segunda mitad del vuelo paga más que la primera',
   perfecto.pts - mitad > mitad,

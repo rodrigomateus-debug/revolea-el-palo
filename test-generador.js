@@ -106,6 +106,19 @@ for (const vyRebote of [VY_PERFECTO, VY_BUENO]) {
   for (let s = 1; s <= 200; s++) {
     const r = M.lcg(s * 7);
     const esc = M.generar(r, 400, 20000);
+    // Los 9 de la cadena NO son un VX_MAX escrito flojo, y son dos cosas distintas:
+    // ADEL_PEOR (cuánto arco se ve por delante) se mide a VX_MAX porque el atraso de
+    // la cámara es instantáneo y el palo sí toca 10,63 en el lanzamiento; la VELOCIDAD
+    // DE LA CADENA es otra cosa, y medida sobre 300 rebotes de vuelos impecables no
+    // pasa nunca de 6,95 (mediana 1,78, p95 3,96): el drag se la come dentro del
+    // primer arco y el rebote perfecto, que hace vx*1.06+0.4, no le gana. Así que 9 ya
+    // está por encima de lo alcanzable y la medición es conservadora de este lado.
+    // Correrla a VX_MAX da 758 ms con 119 objetivos cortos, pero es un estado al que
+    // la cadena no llega — y da lo mismo con el impulso viejo de 7.4 (758 ms, 87
+    // cortos), así que no es algo que haya traído la calibración.
+    // Lo que sostiene el 9 es la aserción 'la cadena nunca llega a la velocidad que
+    // supone el presupuesto de legibilidad' de test-destreza.js, que corre el bot y
+    // falla si algún rebote lo supera.
     let est = { x: 300, y: M.F.GY - 60, vx: 9, vy: vyRebote };
     for (let reb = 0; reb < 10; reb++) {
       M.rellenar(esc, r, est);

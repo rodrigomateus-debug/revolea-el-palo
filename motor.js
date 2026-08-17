@@ -199,6 +199,22 @@
       if (puesto) break;
     }
     if (!puesto) return 'sin-salida';
+    // Lo que el plantado solapa se va de la cancha. Si quedaran los dos, en el mismo
+    // x uno es plataforma y el otro es pared: el palo rebota y se estrella en el
+    // mismo paso de física, y el jugador no tiene forma de evitarlo. Medido, era la
+    // ÚNICA muerte de un bot impecable, y como el momento depende del escenario el
+    // largo del vuelo salía aleatorio y el score con entrada idéntica variaba 1807×.
+    // Se limpia acá en vez de buscar otro lugar para plantar porque el lugar de
+    // aterrizaje está ocupado seguido: rechazar las posiciones ocupadas deja 260 de
+    // 3388 estados sin salida y rompe la invariante de solvencia de arriba. Plantar
+    // siempre y limpiar el vecino no la toca.
+    // Lo que se saca está a AVANCE_MIN o más por delante del palo y el jugador no lo
+    // vio nunca. En particular nunca es el obstáculo del que el palo viene rebotando:
+    // AVANCE_MIN (40) es mayor que el obstáculo más ancho (30) más los dos aires de
+    // 4 px, así que el de atrás no llega a solapar al plantado.
+    // El 4 es el mismo aire que el test de choque del vuelo le da a los bordes.
+    for (let i = obs.length - 1; i >= 0; i--)
+      if (puesto.x < obs[i].x + obs[i].w + 4 && obs[i].x - 4 < puesto.x + puesto.w) obs.splice(i, 1);
     obs.push(puesto);
     obs.sort((a, b) => a.x - b.x);
     return 'planto';

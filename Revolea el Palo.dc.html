@@ -762,17 +762,11 @@ class Component extends DCLogic{
         // dejaba inalcanzable la mitad tardía de la ventana de perfecto, que es
         // simétrica en resolverRebote. El resto de los obstáculos sigue chocando.
         if(o===g.objetivo)continue;
-        // …y tampoco es pared el vecino que SOLAPA la caja del objetivo: en el mismo
-        // x en que el objetivo es plataforma, el vecino estrella el palo (vx*=.22) y
-        // el jugador no tiene forma de evitarlo. Pasa seguido porque Motor.rellenar
-        // planta el objetivo justo donde el arco cruza la cima, sin mirar si ya había
-        // algo ahí — y no puede mirarlo: filtrar los lugares ocupados deja 260 de
-        // 3388 estados sin salida y rompe la invariante de solvencia (medido).
-        // Era la ÚNICA muerte del bot impecable: sin esta línea 17 de 20 vuelos
-        // perfectos mueren antes del corte y el score de entrada idéntica varía
-        // 2250×; con ella los 20 llegan al corte y varía 1,9×. El 4 es el mismo aire
-        // que se da hit() para los bordes.
-        if(g.objetivo&&o.x<g.objetivo.x+g.objetivo.w+4&&g.objetivo.x<o.x+o.w+4)continue;
+        // No hay que eximir además al vecino que solapa al objetivo: Motor.rellenar
+        // saca de la cancha lo que el plantado solapa, así que no queda ninguno. Se
+        // arregla ahí y no acá porque una exención atada al objetivo VIGENTE deja un
+        // agujero: cuando buscarObjetivo() avanza, un vecino más alto que el objetivo
+        // viejo vuelve a ser pared mientras el palo todavía está saliendo de su caja.
         if(!o.near&&!this.hit(o,c)&&c.x>o.x-8&&c.x<o.x+o.w+8&&c.y<GY-o.h&&c.y>GY-o.h-20){o.near=true;this.trick('AL RAS',50,.2)}
         if(this.hit(o,c)){
           o.hit=true;
@@ -790,7 +784,9 @@ class Component extends DCLogic{
           // casi siempre vuelve vacío: el objetivo queda en null, el toque no hace
           // nada y el vuelo muere en el suelo, que es lo coherente.
           // Seguro dentro del for..of: acá c.vy=|vy|*.35+.6 es SIEMPRE > 0, así que
-          // rellenar corta por 'sin-salida' sin tocar g.obs.
+          // rellenar corta por 'sin-salida' sin tocar g.obs. Importa más que antes:
+          // la rama que planta ahora TAMBIÉN saca de g.obs lo que el plantado solapa,
+          // y un splice a mitad de este for..of se saltearía obstáculos.
           this.buscarObjetivo();
         }
       }
