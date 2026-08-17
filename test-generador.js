@@ -53,19 +53,38 @@ for (const vyRebote of [-7.4, -4.6]) {
 
 // --- caso excluido a propósito: un raspón (ya bajando, cerca del piso) puede
 // legítimamente no tener salida. Esto no es un bug del generador, es el error
-// del jugador. Solo se documenta que el camino es manejable, no que resuelve.
-(() => {
-  const r = M.lcg(99);
+// del jugador. Se corre sobre 300 semillas (mismo estilo que la cadena de
+// solvencia) para que las ramas ocurran de verdad, y se valida el vínculo real
+// entre lo que devuelve rellenar y lo que después ve alcanzables.
+// `rellenar` devuelve false por dos motivos distintos: (a) ya había un
+// alcanzable antes de llamarlo (nada que plantar) o (b) no encontró candidato
+// válido (raspón real). Hay que separar esos dos casos: si se los trata como
+// uno solo, "ya había alcanzable" (alc no vacío) rompe falsamente la aserción
+// de que "sin salida ⇒ alcanzables vacío".
+let planto = 0, sinSalidaRaspon = 0, yaAlcanzable = 0;
+for (let s = 1; s <= 300; s++) {
+  const r = M.lcg(s);
   const esc = M.generar(r, 400, 20000);
   const est = { x: 300, y: M.F.GY - 46, vx: 9, vy: 2 };
-  let ok = true;
-  try {
-    const agregado = M.rellenar(esc, r, est);
-    const alc = M.alcanzables(esc, est);
-    ok = Array.isArray(alc) && (agregado === true || agregado === false);
-  } catch (e) { ok = false; }
-  ck('un raspón puede quedarse sin salida y eso es correcto', ok);
-})();
+  const teniaAntes = M.alcanzables(esc, est).length > 0;
+  const agregado = M.rellenar(esc, r, est);
+  const alc = M.alcanzables(esc, est);
+  if (teniaAntes) {
+    // no es el raspón que interesa acá: ya había objetivo, rellenar no debía plantar
+    ck('ya alcanzable ⇒ rellenar no plantó de más', agregado === false, agregado);
+    yaAlcanzable++;
+  } else if (agregado === false) {
+    // sin salida real: el estado tiene que reportarse limpio, no a medias
+    ck('sin salida ⇒ alcanzables vacío', alc.length === 0, alc.length);
+    sinSalidaRaspon++;
+  } else {
+    // plantó: lo plantado tiene que ser efectivamente alcanzable
+    ck('si plantó ⇒ hay al menos un alcanzable', alc.length > 0, alc.length);
+    planto++;
+  }
+}
+ck('el caso sin salida se ejercita de verdad', planto > 0 && sinSalidaRaspon > 0,
+  'plantó=' + planto + ' sin salida=' + sinSalidaRaspon + ' ya alcanzable=' + yaAlcanzable);
 
 console.log(fail.length ? 'FALLAS:\n- ' + fail.join('\n- ') : 'TODO OK — generador y trayectoria');
 process.exit(fail.length ? 1 : 0);

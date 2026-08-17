@@ -238,7 +238,19 @@ objetivo siguiente. Sin esto, el jugador pierde por huecos que no controlaba.
   - `alcanzables(obs, est)` → `Array` de obstáculos que la trayectoria desde `est`
     cruza a la altura de su `cima`.
   - `rellenar(obs, rand, est)` → muta `obs` agregando un obstáculo alcanzable si no
-    había ninguno. Devuelve `true` si tuvo que agregar.
+    había ninguno. Devuelve `'ya-habia'`, `'planto'` o `'sin-salida'`.
+
+    **No devuelve booleano a propósito.** Un `false` significaría dos cosas
+    opuestas —«no hacía falta» y «no hay salida»— y quien llama necesita
+    distinguirlas: la primera sigue el vuelo, la segunda lo termina.
+
+    **Sólo planta si `est.vy < 0`**, es decir sólo después de un rebote que
+    devolvió altura. Con un estado descendiendo devuelve `'sin-salida'` sin
+    plantar. Esto es la invariante del spec escrita en código: se garantiza
+    solvencia desde un rebote exitoso, no desde un raspón. Sin ese guardia
+    `rellenar` planta siempre, el palo rebota incluso después de un raspón y el
+    vuelo **nunca termina** — un jugador malo volaría para siempre y se destruye
+    la gradiente de destreza, que es justo lo que este rediseño viene a arreglar.
 
 - [ ] **Step 1: Escribir el test que falla**
 
@@ -682,6 +694,8 @@ Agregar estos métodos a la clase, justo antes de `endShot(kind)`:
   // uno: la invariante de solvencia evita perder por un hueco que no controlabas.
   buscarObjetivo(){const g=this.g,c=g.club;if(!c)return;
     const est={x:c.x,y:c.y,vx:c.vx,vy:c.vy};
+    // 'sin-salida' sólo puede pasar viniendo de un raspón: el palo baja y no
+    // alcanza nada. Se deja caer y el vuelo termina al tocar el suelo.
     Motor.rellenar(g.obs,g.rand,est);
     const alc=Motor.alcanzables(g.obs,est);
     g.objetivo=alc.length?alc[0]:null;
