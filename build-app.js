@@ -113,10 +113,12 @@ ${KEYFRAMES}
       <div style="position:absolute;inset:0;background:#E8C34A;transform-origin:left;animation:loadBar 1.1s ease-out .3s both"></div>
     </div>
     <div style="font:600 8px/1 var(--font-body);letter-spacing:.3em;color:#6FAE87;text-transform:uppercase;margin-top:7px;animation:loadBlink 1s ease-in-out infinite">Cargando bronca…</div>
-    <!-- Ancla relativa: la burbuja va pegada a Miguelón (a quien le habla), no a un
-         top absoluto que se desfasa si el flujo de arriba cambia de altura. -->
+    <!-- La burbuja se ancla al MISMO origen que Miguelón (left:50% del escenario),
+         no al borde derecho: él está corrido +44px del centro, así que anclarla a
+         la derecha dejaba la cola ~90px lejos de su cabeza. margin-left -68px pone
+         la punta del triángulo sobre la cabeza; top -34px la deja justo encima. -->
     <div style="position:relative;margin-top:auto">
-      <div id="bubble" style="position:absolute;right:-14px;top:-56px;width:148px;background:#F4EEDA;color:#0C2B1C;font-family:var(--font-display);font-size:14px;line-height:1.12;letter-spacing:.01em;padding:8px 11px 9px;border-radius:14px;box-shadow:0 3px 0 rgba(12,43,28,.35);text-align:center;z-index:1;animation:bubbleIn .5s cubic-bezier(.2,.9,.3,1.4) 1.4s both,bubbleBob 3.4s ease-in-out 1.9s infinite">Qué lindo día para jugar al golf…</div>
+      <div id="bubble" style="position:absolute;left:50%;margin-left:-68px;top:-34px;width:148px;background:#F4EEDA;color:#0C2B1C;font-family:var(--font-display);font-size:14px;line-height:1.12;letter-spacing:.01em;padding:8px 11px 9px;border-radius:14px;box-shadow:0 3px 0 rgba(12,43,28,.35);text-align:center;z-index:1;animation:bubbleIn .5s cubic-bezier(.2,.9,.3,1.4) 1.4s both,bubbleBob 3.4s ease-in-out 1.9s infinite">Qué lindo día para jugar al golf…</div>
     <div style="position:relative;width:311px;height:171px;overflow:hidden">
       <div style="position:absolute;bottom:0;left:0;width:100%;height:3px;background:repeating-linear-gradient(90deg,rgba(244,238,218,.22) 0 7px,transparent 7px 16px);animation:pasto 1.1s linear infinite"></div>
       <div style="position:absolute;bottom:3px;left:50%;margin-left:-104px;width:196px;height:144px;animation:paseo 2.2s ease-in-out infinite alternate">
