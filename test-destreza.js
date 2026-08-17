@@ -19,6 +19,22 @@ ck('el perfecto sube', perf.vy < 0, perf.vy);
 ck('el raspón no sube y pierde velocidad',
   rasp.vy >= 0 && rasp.vx < est.vx, rasp.vy + ' ' + rasp.vx);
 ck('el perfecto empuja horizontalmente', perf.vx > est.vx, perf.vx);
+// El rebote perfecto tiene que devolver la MISMA altura sin importar con qué
+// velocidad venía. Si decayera con la entrante, una cadena de rebotes perfectos
+// igual se hundiría y el score volvería a tener techo — que es justo lo que este
+// rediseño viene a sacar. No fija IMPULSO: fija que no dependa del estado.
+const lento  = M.resolverRebote({ x: 500, y: 186, vx: 3,  vy: 2 }, 0);
+const rapido = M.resolverRebote({ x: 500, y: 186, vx: 10, vy: 9 }, 0);
+ck('el impulso perfecto no decae con la velocidad entrante',
+  lento.vy === rapido.vy, lento.vy + ' vs ' + rapido.vy);
+// Al revés que el perfecto, el raspón SÍ tiene que depender de la entrante
+// (pierde una fracción de lo que traía, no cae a un piso fijo). Dos entrantes
+// distintas tienen que dar salidas distintas.
+const raspLento  = M.resolverRebote({ x: 500, y: 186, vx: 3,  vy: 2 }, M.F.VENTANA_BUENO + 50);
+const raspRapido = M.resolverRebote({ x: 500, y: 186, vx: 10, vy: 9 }, M.F.VENTANA_BUENO + 50);
+ck('el raspón es proporcional a la velocidad entrante, no un piso fijo',
+  raspLento.vy !== raspRapido.vy && raspLento.vx !== raspRapido.vx,
+  raspLento.vy + '/' + raspLento.vx + ' vs ' + raspRapido.vy + '/' + raspRapido.vx);
 
 // --- combo ---
 ck('perfecto sube el combo', M.comboTras(7, 'perfecto') === 8);
