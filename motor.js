@@ -194,7 +194,7 @@
   //
   // OJO — QUEDA UN HUECO CHICO Y DOCUMENTADO. Medido con el bot sobre 100 vuelos con
   // error de timing (la aserción 'el generador nunca deja sin salida a un palo que
-  // recuperó altura' de test-destreza.js, que está ROJA a propósito y los reporta):
+  // recuperó altura' de test-destreza.js, que los tiene clavados como expectativa):
   // 119 casos de 'sin-salida' con vy < 0, repartidos así:
   //   95  del pique en el suelo — fuera del contrato, no es un rebote contra un
   //       obstáculo (ver el comentario del pique en el vuelo);

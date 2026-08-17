@@ -165,8 +165,12 @@ function vuelo(errorMs, semilla, tope) {
   c.begin();
   for (let i = 0; i < 30; i++) { adv(M.F.STEP); c.tick(now()); }
   c.g.manual = true; c.g.angle = 45; c.g.power = 1;
-  c.fire();
+  // ANTES de fire(): fire -> launch -> buscarObjetivo -> rellenar ya corre con el palo
+  // en y=188 y vy < 0, o sea dentro del contrato y dentro de la banda que se cuenta. Con
+  // el corte después, un hueco del lanzamiento entraba al contador global y a los huecos
+  // de ningún vuelo, y huecosTotal no lo veía.
   const huecos0 = huecos;
+  c.fire();
   // vx en el momento de cada rebote: es el estado que modela la cadena del
   // presupuesto de legibilidad en test-generador.js.
   // Se mide DESPUÉS del rebote, que es la velocidad con la que el palo sale hacia el
@@ -213,7 +217,10 @@ function vuelo(errorMs, semilla, tope) {
 //    (el vuelo ya estaba terminando) y ese rebotito no es "un rebote exitoso".
 // Contar cualquiera de los dos dejaría la aserción roja para siempre midiendo algo
 // correcto. Medido, la diferencia no es de detalle: sobre los mismos 100 vuelos el
-// pique aporta 100 y el rebote de verdad 27.
+// pique aporta 95 de los 119 casos con vy < 0. El reparto medido sobre los 100 vuelos
+// con error de timing, que es el mismo en los tres archivos que lo citan (acá, el
+// contrato de rellenar en motor.js y el comentario del pique en el vuelo):
+//   119 'sin-salida' con vy < 0  =  95 del pique  +  20 con el arco corto  +  4 abiertos
 // Va acá y no en test-generador.js porque su cadena sintética arranca siempre con el
 // rebote entero desde y=GY-60 y nunca modela los estados de media altura que dejan un
 // bueno o un raspón, que son justo donde aparecen los huecos: reportaba 0 de 7500 con
@@ -258,6 +265,11 @@ const mediana = a => a.slice().sort((x,y)=>x-y)[a.length >> 1];
 // en su mezcla de tipos de rebote.
 const perfiles = [200, 120, 60, 0];
 const corridas = perfiles.map(e => Array.from({ length: 25 }, (_, i) => vuelo(e, 1000 + i * 37)));
+// Los excluidos se congelan acá: huecosCortos y huecosPique son contadores globales y
+// más abajo siguen sumando los 40 vuelos del ruido, el impecable y el cuarto de vuelo.
+// Sin este corte el desglose que se imprime mezclaba dos poblaciones: los huecos de los
+// 100 vuelos de `corridas` contra los excluidos de 143 vuelos.
+const cortos100 = huecosCortos, pique100 = huecosPique;
 const medianas = corridas.map(rs => mediana(rs.map(r => r.pts)));
 
 ck('la destreza es monótona: menos error ⇒ más puntos',
@@ -284,27 +296,35 @@ ck('la destreza es monótona: menos error ⇒ más puntos',
 //   vy=-2,81  vx=0,37  y=182   cortos por: tree 3, cart 1, caddie 1, sdga 1 px
 // La igualdad exacta es deliberada: la semilla está fija y los cuatro casos están
 // documentados, así que un cambio para cualquiera de los dos lados tiene que forzar a un
-// humano a mirar. Sigue mordiendo donde importa: con AVANCE_MIN en 230 —que mata vuelos
-// de jugadores sanos— esto da 6 y la aserción cae, y el perfil de 60 ms pasa de 0 a 2
-// huecos, que es la señal de que se rompió una cadena sana. (Los 22 que este comentario
-// decía antes eran con la comparación vieja contra el borde del sprite; con la
-// comparación por cruce el mismo AVANCE_MIN 230 da 6. El margen es más finito, 6 contra
-// 4, pero el sentido es el que importa.)
+// humano a mirar.
+// QUE MUERDE, con la prueba fuerte primero: revertir el arreglo de este mismo diff
+// —comparar `x` (el borde del sprite) en vez de `tr[i].x` (el cruce) dentro de
+// Motor.rellenar— da 24 huecos (200=2, 120=22, 60=0, 0=0) y la aserción cae fuerte.
+// Secundario: con AVANCE_MIN en 230, que mata vuelos de jugadores sanos, da 6 y también
+// cae, con el perfil de 60 ms pasando de 0 a 2.
+// SU LÍMITE, para que un verde no se lea más ancho de lo que es: el predicado de
+// exclusión es geométrico y no tiene constantes ajustadas, pero escala con AVANCE_MIN, y
+// por eso subestima cuánto duele subirlo. Con AVANCE_MIN en 230 los vuelos reales del
+// perfil de 60 ms se mueren 41 veces y este contador reporta 2: la precondición sube con
+// la barra y se come casi toda la señal. Esta aserción prueba "el generador no dejó un
+// hueco"; NO prueba "AVANCE_MIN es entregable por la física", que hoy no tiene test.
+// Se pincha el VECTOR por perfil y no sólo el total: la señal que importa es que un
+// perfil se mueva —el de 60 ms pasando de 0 a 2 es justamente eso— y con el total solo,
+// un +2 acá compensado con un −2 allá queda verde.
 // POR QUÉ ESTÁ EN 4 Y NO EN 0: el predicado de exclusión podría medir el alcance sólo a
 // la altura de la cima más baja (GY - 20), que es más correcto en unidades y deja esto
 // en 0. Medido, así también da 0 con AVANCE_MIN en 230, donde mueren vuelos de jugadores
 // sanos: no distingue una cadena sana de una rota. No lo "limpies" a 0 sin volver a
 // medir las dos cosas.
-const HUECOS_CONOCIDOS = 4;
+const HUECOS_CONOCIDOS = [0, 4, 0, 0];   // uno por perfil, en el orden de `perfiles`
 const huecosPerfil = corridas.map(rs => rs.reduce((a, r) => a + r.huecos, 0));
-const huecosTotal = huecosPerfil.reduce((a, b) => a + b, 0);
-ck('los huecos del generador siguen siendo los ' + HUECOS_CONOCIDOS + ' conocidos',
-  huecosTotal === HUECOS_CONOCIDOS,
-  perfiles.map((e,i)=>e+'ms='+huecosPerfil[i]).join('  ') + ' = ' + huecosTotal +
-  ' huecos tras un rebote (esperados ' + HUECOS_CONOCIDOS + '; el vx más bajo fue ' +
-  (vxHueco === Infinity ? 'n/d' : vxHueco.toFixed(2)) +
-  '); no cuentan ' + huecosCortos + ' cuyo arco no cubre AVANCE_MIN (' + M.AVANCE_MIN +
-  ' px) ni ' + huecosPique + ' tras un pique en el suelo');
+ck('los huecos del generador siguen siendo los 4 conocidos',
+  huecosPerfil.every((n, i) => n === HUECOS_CONOCIDOS[i]),
+  perfiles.map((e,i)=>e+'ms='+huecosPerfil[i]).join('  ') + ' contra los esperados ' +
+  perfiles.map((e,i)=>e+'ms='+HUECOS_CONOCIDOS[i]).join('  ') +
+  ' (el vx más bajo fue ' + (vxHueco === Infinity ? 'n/d' : vxHueco.toFixed(2)) +
+  '); de los mismos 100 vuelos no cuentan ' + cortos100 + ' cuyo arco no cubre ' +
+  'AVANCE_MIN (' + M.AVANCE_MIN + ' px) ni ' + pique100 + ' tras un pique en el suelo');
 
 // El ruido es la varianza del score con la MISMA entrada (error 0, sin jitter) y
 // distinto escenario: es lo que el jugador no controla. La señal es lo que separa
@@ -366,8 +386,8 @@ console.log('destreza: ' + perfiles.map((e,i)=>e+'ms=' + medianas[i]).join('  ')
   '\n          peor de ' + impecables.length + ' impecables: ' + peorPasos + ' pasos y ' + peorPts +
   ' pts; combo ×' + perfecto.combo + '; rebote más rápido a vx ' + peorVxRebote.toFixed(2) +
   '; 4× el largo paga ' + (perfecto.pts / Math.max(1, cuarto)).toFixed(2) + '×' +
-  '\n          huecos del generador: ' + huecosPerfil.reduce((a,b)=>a+b,0) +
-  ' (fuera del contrato: ' + huecosCortos + ' con el arco más corto que AVANCE_MIN, ' +
-  huecosPique + ' tras un pique)');
+  '\n          huecos del generador en los 100 vuelos con error: ' +
+  huecosPerfil.reduce((a,b)=>a+b,0) + ' (fuera del contrato, mismos 100 vuelos: ' +
+  cortos100 + ' con el arco más corto que AVANCE_MIN, ' + pique100 + ' tras un pique)');
 console.log(fail.length ? 'FALLAS:\n- ' + fail.join('\n- ') : 'TODO OK — rebote, combo, puntaje, variedad y destreza');
 process.exit(fail.length ? 1 : 0);
