@@ -99,5 +99,31 @@ for (let s = 1; s <= 200; s++) {
 ck('ningún objetivo avisa con menos de AVISO_MIN_MS', cortos === 0,
   cortos + ' de ' + medidos + ' avisan poco; el mínimo fue ' + Math.round(minAviso) + ' ms');
 
+// --- alcanzables y avisoMs deben coincidir en qué es "alcanzable": todo lo que
+// alcanzables devuelve tiene que dar un avisoMs finito. Se corre sobre el mismo
+// barrido de 300 semillas que la invariante de solvencia para que aparezcan de
+// verdad los saltos de un solo paso que atraviesan un obstáculo angosto.
+let infinitosEnAlcanzable = 0, chequeadosAlcanzable = 0;
+for (const vyRebote of [-7.4, -4.6]) {
+  for (let s = 1; s <= 300; s++) {
+    const r = M.lcg(s);
+    const esc = M.generar(r, 400, 20000);
+    let est = { x: 300, y: M.F.GY - 60, vx: 9, vy: vyRebote };
+    for (let reb = 0; reb < 25; reb++) {
+      M.rellenar(esc, r, est);
+      const alc = M.alcanzables(esc, est);
+      if (!alc.length) break;
+      for (const o of alc) {
+        chequeadosAlcanzable++;
+        if (M.avisoMs(est, o, M.F.ZOOM_VUELO) === Infinity) infinitosEnAlcanzable++;
+      }
+      const o = alc[0];
+      est = { x: o.x + o.w / 2, y: o.cima, vx: Math.min(M.F.VX_MAX, 9), vy: vyRebote };
+    }
+  }
+}
+ck('todo alcanzable tiene aviso finito', infinitosEnAlcanzable === 0,
+  infinitosEnAlcanzable + ' de ' + chequeadosAlcanzable + ' alcanzables dieron avisoMs Infinity');
+
 console.log(fail.length ? 'FALLAS:\n- ' + fail.join('\n- ') : 'TODO OK — generador y trayectoria');
 process.exit(fail.length ? 1 : 0);

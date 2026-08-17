@@ -79,6 +79,14 @@
     return out;
   }
 
+  // Un solo test de cruce para todos. alcanzables y avisoMs lo tenían escrito por
+  // separado y se desincronizaron: avisoMs exigía que el paso actual cayera dentro
+  // del obstáculo, así que un salto que lo pasaba de largo contaba como alcanzable
+  // pero sin paso de llegada, y el objetivo quedaba fuera del presupuesto de aviso.
+  function cruzaCima(a, b, o) {
+    return b.vy > 0 && a.y <= o.cima && b.y >= o.cima && b.x >= o.x && a.x <= o.x + o.w;
+  }
+
   // Obstáculos que la trayectoria desde `est` cruza a la altura de su cima.
   // Se pide que el palo esté bajando (vy > 0) para no contar los que pasa por
   // debajo mientras sube.
@@ -87,11 +95,7 @@
     for (const o of obs) {
       if (o.x + o.w < est.x) continue;
       for (let i = 1; i < tr.length; i++) {
-        const a = tr[i - 1], b = tr[i];
-        if (b.vy <= 0) continue;
-        const cruzaX = b.x >= o.x && a.x <= o.x + o.w;
-        const cruzaY = a.y <= o.cima && b.y >= o.cima;
-        if (cruzaX && cruzaY) { out.push(o); break; }
+        if (cruzaCima(tr[i - 1], tr[i], o)) { out.push(o); break; }
       }
     }
     return out;
@@ -145,8 +149,7 @@
       // la cámara deja al palo a un tercio del borde izquierdo
       const bordeDerecho = tr[i].x - anchoVisible / 3 + anchoVisible;
       if (pasoVisible === null && o.x <= bordeDerecho) pasoVisible = i;
-      if (i > 0 && tr[i].vy > 0 && tr[i-1].y <= o.cima && tr[i].y >= o.cima
-          && tr[i].x >= o.x && tr[i].x <= o.x + o.w) { pasoLlegada = i; break; }
+      if (i > 0 && cruzaCima(tr[i - 1], tr[i], o)) { pasoLlegada = i; break; }
     }
     if (pasoVisible === null || pasoLlegada === null) return Infinity;
     // cada paso de física equivale a STEP/VUELO ms de reloj
@@ -155,7 +158,7 @@
 
   const api = { F: F, acotar: acotar, metros: metros, paso: paso, trayectoria: trayectoria,
                 TIPOS: TIPOS, lcg: lcg, generar: generar, alcanzables: alcanzables,
-                rellenar: rellenar, avisoMs: avisoMs };
+                cruzaCima: cruzaCima, rellenar: rellenar, avisoMs: avisoMs };
   if (typeof module !== 'undefined' && module.exports) module.exports = api;
   else raiz.Motor = api;
 })(typeof window !== 'undefined' ? window : globalThis);
