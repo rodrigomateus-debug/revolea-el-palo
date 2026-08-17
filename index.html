@@ -791,7 +791,11 @@ class Component extends DCLogic{
       g.hudT=(g.hudT||0)+1;
       if(g.club&&!g.club.grounded&&g.hudT%6===0){const d=(this.nearGreen(c.x)-c.x)/PXM;
         this.txt(this.rHint,(d>0?'Green a '+Math.round(d)+' m':'Green pasado')+' · Combo ×'+g.combo);}
-      g.cam+=((Math.max(0,c.x-48))-g.cam)*.09;
+      // El corrimiento sale de Motor.camObjetivo y el factor del lerp de Motor.F.SEG:
+      // son los mismos de los que Motor.adelante saca cuánto arco se ve por delante del
+      // palo, y de ahí el aviso mínimo. Escritos acá a mano, la cámara y el presupuesto
+      // de legibilidad se separan sin que nada avise.
+      g.cam+=((Math.max(0,c.x-Motor.camObjetivo(c.vx)))-g.cam)*Motor.F.SEG;
       if(g.hudT%3===0)this.txt(this.rMetros,Math.round(Math.max(0,(c.x-TEE)/PXM))+' M');
       this.cull(g.obs,g.cam-160);
       this.cull(g.pel,g.cam*0.62-40);
@@ -841,13 +845,14 @@ class Component extends DCLogic{
     if(z!==1){ctx.setTransform(2/z,0,0,2/z,
       (shk?(Math.random()-.5)*shk*2:0)+W*(z-1)/3,
       (shk?(Math.random()-.5)*shk*2:0)+GY*(z-1)/2);}
-    // Encuadre visible en unidades lógicas, despejado del transform de arriba:
-    // un punto lógico X cae en 2X/z + corrimiento, así que se ve de vL a vR y de
-    // vT a vB. Con z=1 esto da 0..W y 0..H, o sea lo de siempre. Se despeja acá y
-    // no a ojo porque con z=2,5 el ancho visible es 335 px: los recorridos que
-    // cortaban en W dejaban de dibujar los obstáculos de la mitad derecha de la
-    // pantalla, que son justo los que el jugador necesita ver venir.
-    const vL=-W*(z-1)*z/6,vR=vL+W*z,vT=-GY*(z-1)*z/4,vB=vT+H*z;
+    // Encuadre visible en unidades lógicas, despejado del transform de arriba. Con
+    // z=1 da 0..W y 0..H, o sea lo de siempre. Se despeja y no se pone a ojo porque
+    // con z=2,5 el ancho visible es 335 px: los recorridos que cortaban en W dejaban
+    // de dibujar los obstáculos de la mitad derecha de la pantalla, que son justo los
+    // que el jugador necesita ver venir. Sale de Motor.encuadre y no de una cuenta
+    // acá para que Motor.avisoMs mida el MISMO campo visible que se dibuja: cuando
+    // cada uno tenía su modelo, el presupuesto de legibilidad era 91 ms optimista.
+    const enc=Motor.encuadre(z),vL=enc.izq,vR=enc.der,vT=enc.arriba,vB=enc.abajo;
     // Los fondos sangran 8 px (escalados) fuera del encuadre: con el shake el
     // transform corre todo hasta 7 px y antes quedaba una franja sin pintar.
     const bl=8*z,fx0=vL-bl,fw=W*z+bl*2,fy0=vT-bl,fy1=vB+bl;

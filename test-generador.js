@@ -81,6 +81,12 @@ ck('el caso sin salida se ejercita de verdad', sinSalidaRaspon > 0 && yaAlcanzab
   'planto=' + planto + ' sin-salida=' + sinSalidaRaspon + ' ya-habia=' + yaAlcanzable);
 
 // --- presupuesto de legibilidad ---
+// Se mide en el PEOR encuadre, no en el típico: la cámara se atrasa en proporción a la
+// velocidad, así que a VX_MAX es donde menos arco se ve por delante del palo. Medido a
+// velocidad media el presupuesto pasaba mientras el peor frame quedaba abajo del piso,
+// que es la misma forma de agujero que dejaba 4,5% de objetivos afuera en la Task 3.
+const ADEL_PEOR = M.adelante(M.F.ZOOM_VUELO, M.F.VX_MAX);
+const ADEL_QUIETO = M.adelante(M.F.ZOOM_VUELO, 0);
 let cortos = 0, medidos = 0, minAviso = Infinity;
 for (let s = 1; s <= 200; s++) {
   const r = M.lcg(s * 7);
@@ -90,7 +96,7 @@ for (let s = 1; s <= 200; s++) {
     M.rellenar(esc, r, est);
     const alc = M.alcanzables(esc, est);
     if (!alc.length) break;
-    const o = alc[0], ms = M.avisoMs(est, o, M.F.ZOOM_VUELO);
+    const o = alc[0], ms = M.avisoMs(est, o, ADEL_PEOR);
     medidos++; minAviso = Math.min(minAviso, ms);
     if (ms < M.F.AVISO_MIN_MS) cortos++;
     est = { x: o.x + o.w / 2, y: o.cima, vx: Math.min(M.F.VX_MAX, 9), vy: -7 };
@@ -115,7 +121,7 @@ for (const vyRebote of [-7.4, -4.6]) {
       if (!alc.length) break;
       for (const o of alc) {
         chequeadosAlcanzable++;
-        if (M.avisoMs(est, o, M.F.ZOOM_VUELO) === Infinity) infinitosEnAlcanzable++;
+        if (M.avisoMs(est, o, ADEL_PEOR) === Infinity) infinitosEnAlcanzable++;
       }
       const o = alc[0];
       est = { x: o.x + o.w / 2, y: o.cima, vx: Math.min(M.F.VX_MAX, 9), vy: vyRebote };
@@ -136,5 +142,11 @@ ck('el vuelo en vivo usa Motor.paso', /Motor\.paso\(/.test(cuerpoM));
 ck('no quedó integración inline duplicada',
   !/c\.vx=clamp\(c\.vx,-16,16\)/.test(cuerpoM) && !/c\.vy\+=G\*0\.44/.test(cuerpoM));
 
+// El número del presupuesto se imprime siempre y no sólo cuando falla: es el que hay
+// que mirar cuando se recalibra la velocidad o el zoom.
+console.log('presupuesto de legibilidad: aviso mínimo ' + Math.round(minAviso) + ' ms (piso ' +
+  M.F.AVISO_MIN_MS + ') sobre ' + medidos + ' objetivos, con ' +
+  ADEL_PEOR.toFixed(1) + ' px de arco por delante del palo en el PEOR caso (a VX_MAX; ' +
+  ADEL_QUIETO.toFixed(1) + ' px con el palo lento)');
 console.log(fail.length ? 'FALLAS:\n- ' + fail.join('\n- ') : 'TODO OK — generador y trayectoria');
 process.exit(fail.length ? 1 : 0);

@@ -391,8 +391,13 @@ ck('sin objetivo el arco predicho sigue estando', puntos(fSin).length > 5, punto
 // "nunca crece" pero falla el cierre.
 const dr = revolear(reposo());
 let anilloCrecio = 0, cerrados = 0, frames = 0, coordsRotas = 0, rebR = 0, prevR = null, prevPO = null;
-let maxR = 0, minR = 99, arbVis = 0, arbFalt = 0;
+let maxR = 0, minR = 99, arbVis = 0, arbFalt = 0, dBorde = 0, comparados = 0;
+const adel = [];
 const TRONCO = '#3D2A18'; // el tronco del árbol: un color que no usa nada más
+const ENC = Motor.encuadre(Motor.F.ZOOM_VUELO);
+// Lo que el presupuesto de legibilidad de test-generador.js da por sentado: en el peor
+// caso (a VX_MAX) se ven ADEL_PEOR px de arco por delante del palo.
+const ADEL_PEOR = Motor.adelante(Motor.F.ZOOM_VUELO, Motor.F.VX_MAX);
 for (let i = 0; i < 60000 && dr.g.phase === 'fly'; i++) {
   dr.g.shake = 0;
   REC = []; VT += 1000 / 60; dr.tick(VT); const f = REC; REC = null;
@@ -403,6 +408,14 @@ for (let i = 0; i < 60000 && dr.g.phase === 'fly'; i++) {
     // motor, así que un recorrido que corte en W deja árboles sin dibujar en la
     // mitad derecha de la pantalla alejada y esto lo ve.
     const vLf = -t[4] / t[0], vRf = (134 * 2 - t[4]) / t[0];
+    // El encuadre que Motor.encuadre le promete a avisoMs tiene que ser el que draw()
+    // instaló de verdad. Se compara contra el transform grabado, no contra la fórmula.
+    // Sólo en los frames con el zoom puesto: el último frame del vuelo ya es z=1.
+    if (t[0] === 2 / Motor.F.ZOOM_VUELO) { comparados++;
+      dBorde = Math.max(dBorde, Math.abs(vRf - ENC.der), Math.abs(vLf - ENC.izq));
+      // px de arco por delante del palo REALES: la cámara persigue con un lerp de .09,
+      // así que va atrasada y se ve menos de lo que promete encuadre().adelante.
+      if (dr.g.club) adel.push(vRf - (dr.g.club.x - dr.g.cam)); }
     const vis = dr.g.obs.filter(o => o.t === 'tree' &&
       o.x - dr.g.cam + o.w >= vLf && o.x - dr.g.cam <= vRf).length;
     const troncos = f.filter(x => x.op === 'fillRect' && x.fill === TRONCO).length;
@@ -423,12 +436,31 @@ ck('el anillo se cierra de ancho a apretado en varios objetivos', cerrados >= 3,
   'sólo ' + cerrados + ' objetivos con el anillo cerrándose entero');
 ck('ninguna coordenada NaN/undefined en todo el vuelo', coordsRotas === 0,
   coordsRotas + ' coordenadas rotas en ' + frames + ' frames');
+// El presupuesto de legibilidad (test-generador.js) mide con Motor.encuadre. Si draw()
+// dibuja otro encuadre, ese presupuesto mide un campo visual que el jugador no tiene:
+// era el bug de los 91 ms optimistas. Con shake en 0 el transform es exacto, así que
+// se exige coincidencia al píxel.
+ck('avisoMs mide el mismo campo visible que dibuja draw', dBorde < 1e-9,
+  'los bordes difieren hasta ' + dBorde.toFixed(2) + ' px lógicos');
+// sin esto, un draw() que no ponga nunca el zoom dejaría la de arriba en 0 === 0
+ck('hubo frames con el zoom puesto para comparar', comparados > 1000, comparados + ' frames');
 ck('no falta ningún obstáculo del encuadre alejado', arbFalt === 0,
   arbFalt + ' árboles visibles sin dibujar');
 // sin esto lo de arriba pasaría con 0 árboles en pantalla en todo el vuelo
 ck('hubo árboles en pantalla para verificar', arbVis > 100, arbVis + ' árbol-frames');
 console.log('render: ' + pv.length + ' puntos de arco en pantalla, anillo cerrado entero en ' +
   cerrados + ' objetivos, ' + arbVis + ' árbol-frames, ' + frames + ' frames grabados');
+// El presupuesto de legibilidad se calcula suponiendo ADEL_PEOR px de arco por delante
+// del palo. Si el vuelo real deja menos en algún frame, el presupuesto miente en ese
+// frame: es exactamente el agujero de medir en el caso típico. Se compara contra el
+// PEOR frame del vuelo, no contra la mediana.
+adel.sort((a, b) => a - b);
+ck('ni el peor frame del vuelo ve menos arco por delante que el peor caso del modelo',
+  adel[0] >= ADEL_PEOR, 'el peor frame vio ' + adel[0].toFixed(1) +
+  ' px y el modelo promete ' + ADEL_PEOR.toFixed(1));
+console.log('encuadre: el modelo promete ' + ADEL_PEOR.toFixed(1) +
+  ' px de arco por delante del palo en el peor caso; medidos en el vuelo: peor frame ' +
+  adel[0].toFixed(1) + ', mediana ' + adel[adel.length >> 1].toFixed(1));
 
 console.log('distancia del vuelo de prueba: ' + dist + ' m');
 console.log('picos: obs=' + maxObs + ' pel=' + maxPel);

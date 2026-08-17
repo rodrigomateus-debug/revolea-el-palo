@@ -15,6 +15,8 @@
     TEE: 26,              // x del tee
     PXM: 3,               // pixeles por metro
     W: 134, H: 291,       // canvas lógico
+    CAM: 48,              // x de pantalla donde la cámara deja el palo
+    SEG: 0.09,            // cuánto del camino al objetivo recorre la cámara por frame
     VX_MAX: 10,           // techo de velocidad horizontal
     TECHO: 50,            // y mínimo
     ZOOM_VUELO: 2.5,      // cuánto se aleja la cámara durante el vuelo
@@ -25,6 +27,40 @@
 
   const acotar = (v, a, b) => (v < a ? a : v > b ? b : v);
   const metros = x => Math.round(Math.max(0, (x - F.TEE) / F.PXM));
+
+  // El campo visible, en unidades lógicas, para un zoom dado. UNA sola derivación,
+  // que usan tanto el que dibuja como el que mide: draw() pinta con
+  // setTransform(2/z,0,0,2/z, W*(z-1)/3, GY*(z-1)/2), así que el punto lógico que cae
+  // en cada borde del canvas sale de despejar eso (X = (px - corrimiento)*z/2).
+  // avisoMs tenía su propio modelo escrito a mano ("el palo va a un tercio del borde
+  // izquierdo" = 223 px por delante) mientras el encuadre real daba 203, y el
+  // presupuesto de legibilidad salía 91 ms optimista: medía un campo visual que el
+  // jugador no tiene.
+  function encuadre(zoom) {
+    const z = zoom || 1;
+    const izq = -F.W * (z - 1) * z / 6, arriba = -F.GY * (z - 1) * z / 4;
+    return { izq: izq, der: izq + F.W * z, arriba: arriba, abajo: arriba + F.H * z };
+  }
+
+  // Cuánto se atrasa la cámara. Persigue el objetivo con un lerp de F.SEG por frame de
+  // lógica, así que si el objetivo avanza d px por frame se queda estacionada d*(1-SEG)/SEG
+  // px atrás. El palo avanza vx por paso de física y hay F.VUELO pasos de física por
+  // frame de lógica.
+  const atrasoCam = vx => Math.abs(vx) * F.VUELO * (1 - F.SEG) / F.SEG;
+  // Objetivo del lerp: el corrimiento se achica con la velocidad para compensar el
+  // atraso. El problema es proporcional a la velocidad (la cámara se atrasa justo
+  // cuando el palo acelera, y ahí se come el arco visible por delante), así que la
+  // corrección también: a poca velocidad el encuadre queda igual que siempre y a mucha
+  // el palo se corre hacia el borde izquierdo, que es de donde sale el arco que se
+  // recupera. Piso en 0 para que la cámara nunca se adelante al palo.
+  const camObjetivo = vx => Math.max(0, F.CAM - atrasoCam(vx));
+  // Dónde queda el palo en pantalla de verdad: el objetivo más lo que la cámara se
+  // atrasa. Es max(F.CAM, atrasoCam(vx)), o sea nunca peor que F.CAM.
+  const camPantalla = vx => camObjetivo(vx) + atrasoCam(vx);
+  // Px de arco visibles por delante del palo: ESTE es el presupuesto de legibilidad.
+  // Depende de la velocidad, así que el que mide tiene que decir a qué velocidad mide;
+  // el peor caso es F.VX_MAX.
+  const adelante = (zoom, vx) => encuadre(zoom).der - camPantalla(vx);
 
   // Un paso de física. Es la misma integración que usa el vuelo en vivo, para que
   // la predicción y la realidad no se separen nunca.
@@ -141,13 +177,16 @@
   // Milisegundos entre que el obstáculo entra en el campo visible y el momento en
   // que el palo llega a su cima. Con la cámara vieja (sin zoom) y VX_MAX 16 esto
   // daba 160 ms, por debajo del tiempo de reacción humano (~250 ms).
-  function avisoMs(est, o, zoom) {
-    const anchoVisible = F.W * (zoom || 1);
+  // `verAdelante` son los px de arco visibles por delante del palo, que salen de
+  // Motor.adelante(zoom, vx). Se recibe el número y no el zoom para que el llamador
+  // diga explícitamente A QUÉ VELOCIDAD mide: medir el presupuesto en el caso típico
+  // y no en el peor es la misma clase de agujero que dejar 4,5% de objetivos afuera.
+  function avisoMs(est, o, verAdelante) {
     const tr = trayectoria(est, 1200);
     let pasoVisible = null, pasoLlegada = null;
     for (let i = 0; i < tr.length; i++) {
-      // la cámara deja al palo a un tercio del borde izquierdo
-      const bordeDerecho = tr[i].x - anchoVisible / 3 + anchoVisible;
+      // el borde derecho del encuadre que dibuja draw(), no un modelo aparte
+      const bordeDerecho = tr[i].x + verAdelante;
       if (pasoVisible === null && o.x <= bordeDerecho) pasoVisible = i;
       if (i > 0 && cruzaCima(tr[i - 1], tr[i], o)) { pasoLlegada = i; break; }
     }
@@ -191,7 +230,9 @@
     return 1 / (1 + repes);
   }
 
-  const api = { F: F, acotar: acotar, metros: metros, paso: paso, trayectoria: trayectoria,
+  const api = { F: F, acotar: acotar, metros: metros, encuadre: encuadre,
+                camObjetivo: camObjetivo, adelante: adelante,
+                paso: paso, trayectoria: trayectoria,
                 TIPOS: TIPOS, lcg: lcg, generar: generar, alcanzables: alcanzables,
                 cruzaCima: cruzaCima, rellenar: rellenar, avisoMs: avisoMs,
                 resolverRebote: resolverRebote, comboTras: comboTras, acreditar: acreditar,
