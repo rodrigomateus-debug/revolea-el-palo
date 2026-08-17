@@ -100,12 +100,20 @@
   // Invariante de solvencia: si desde `est` no hay nada alcanzable, se planta un
   // obstáculo donde el arco cruza la altura de rebote. Random pero siempre
   // superable — sin esto el jugador pierde por un hueco que no controlaba.
-  // Solo cuenta un cruce que quede adelante de `est.x` por al menos AVANCE_MIN:
-  // si no hay ninguno, el palo ya viene bajando cerca del piso después de un mal
-  // golpe (un raspón) y no tiene a dónde ir — eso es el error del jugador, no un
-  // defecto del generador, así que devolver false es lo correcto.
+  // Solo cuenta un cruce que quede adelante de `est.x` por al menos AVANCE_MIN.
+  // La invariante rige solo "desde un rebote que recuperó altura" (vy < 0): un
+  // raspón (vy >= 0, ya bajando) no recibe regalo — ahí no se planta nada, y que
+  // no haya salida es el error del jugador, no un defecto del generador.
+  // Devuelve un string, no un boolean, porque hay tres desenlaces distintos que
+  // el llamador necesita distinguir: 'ya-habia' (no hacía falta tocar nada, el
+  // vuelo sigue), 'planto' (se agregó un objetivo, el vuelo sigue) y
+  // 'sin-salida' (no hay ni había nada alcanzable, el vuelo termina acá). Un
+  // boolean no puede expresar "nada que hacer" y "sin salida" como cosas
+  // distintas, y esa distinción es justamente la que separa seguir volando de
+  // terminar el vuelo.
   function rellenar(obs, rand, est) {
-    if (alcanzables(obs, est).length) return false;
+    if (alcanzables(obs, est).length) return 'ya-habia';
+    if (est.vy >= 0) return 'sin-salida';
     const tr = trayectoria(est, 1200);
     let puesto = null;
     for (const clave of CLAVES) {
@@ -120,10 +128,10 @@
       }
       if (puesto) break;
     }
-    if (!puesto) return false;
+    if (!puesto) return 'sin-salida';
     obs.push(puesto);
     obs.sort((a, b) => a.x - b.x);
-    return true;
+    return 'planto';
   }
 
   const api = { F: F, acotar: acotar, metros: metros, paso: paso, trayectoria: trayectoria,
