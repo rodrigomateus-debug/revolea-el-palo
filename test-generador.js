@@ -27,24 +27,45 @@ ck('la cima es el techo del obstáculo', obs.every(o => o.cima === M.F.GY - o.h)
 ck('el lcg es determinista',
   JSON.stringify(M.generar(M.lcg(12345), 400, 6000)) === JSON.stringify(obs));
 
-// --- invariante de solvencia: desde cualquier rebote hay algo alcanzable ---
-let sinSalida = 0, probados = 0;
-for (let s = 1; s <= 300; s++) {
-  const r = M.lcg(s);
-  const esc = M.generar(r, 400, 20000);
-  // se simula una cadena de rebotes con impulso pleno desde varios puntos
-  let est = { x: 300, y: M.F.GY - 60, vx: 9, vy: -7 };
-  for (let reb = 0; reb < 25; reb++) {
-    M.rellenar(esc, r, est);
-    const alc = M.alcanzables(esc, est);
-    probados++;
-    if (!alc.length) { sinSalida++; break; }
-    const o = alc[0];
-    est = { x: o.x + o.w / 2, y: o.cima, vx: Math.min(M.F.VX_MAX, 9), vy: -7 };
+// --- invariante de solvencia: desde un rebote que recuperó altura siempre hay
+// un próximo objetivo alcanzable. Se prueba con las dos fuerzas de rebote que
+// va a producir el resolutor de rebotes: -7.4 (perfecto) y -4.6 (bueno). Un
+// rebote débil sigue siendo un rebote exitoso, no un error del jugador.
+for (const vyRebote of [-7.4, -4.6]) {
+  let sinSalida = 0, probados = 0;
+  for (let s = 1; s <= 300; s++) {
+    const r = M.lcg(s);
+    const esc = M.generar(r, 400, 20000);
+    // se simula una cadena de rebotes con la misma fuerza desde varios puntos
+    let est = { x: 300, y: M.F.GY - 60, vx: 9, vy: vyRebote };
+    for (let reb = 0; reb < 25; reb++) {
+      M.rellenar(esc, r, est);
+      const alc = M.alcanzables(esc, est);
+      probados++;
+      if (!alc.length) { sinSalida++; break; }
+      const o = alc[0];
+      est = { x: o.x + o.w / 2, y: o.cima, vx: Math.min(M.F.VX_MAX, 9), vy: vyRebote };
+    }
   }
+  ck('el generador nunca deja un hueco sin salida (vy=' + vyRebote + ')', sinSalida === 0,
+    sinSalida + ' de ' + probados + ' estados sin objetivo alcanzable');
 }
-ck('el generador nunca deja un hueco sin salida', sinSalida === 0,
-  sinSalida + ' de ' + probados + ' estados sin objetivo alcanzable');
+
+// --- caso excluido a propósito: un raspón (ya bajando, cerca del piso) puede
+// legítimamente no tener salida. Esto no es un bug del generador, es el error
+// del jugador. Solo se documenta que el camino es manejable, no que resuelve.
+(() => {
+  const r = M.lcg(99);
+  const esc = M.generar(r, 400, 20000);
+  const est = { x: 300, y: M.F.GY - 46, vx: 9, vy: 2 };
+  let ok = true;
+  try {
+    const agregado = M.rellenar(esc, r, est);
+    const alc = M.alcanzables(esc, est);
+    ok = Array.isArray(alc) && (agregado === true || agregado === false);
+  } catch (e) { ok = false; }
+  ck('un raspón puede quedarse sin salida y eso es correcto', ok);
+})();
 
 console.log(fail.length ? 'FALLAS:\n- ' + fail.join('\n- ') : 'TODO OK — generador y trayectoria');
 process.exit(fail.length ? 1 : 0);

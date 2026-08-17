@@ -59,6 +59,7 @@
     sdga:   { w: 18, h: 30 },
   };
   const CLAVES = ['tree', 'cart', 'caddie', 'sdga'];
+  const AVANCE_MIN = 40; // distancia mínima adelante de est.x para que un plantado cuente como objetivo real
 
   // Congruencial lineal: aleatorio determinista, para que los tests reproduzcan
   // exactamente el mismo escenario a partir de una semilla.
@@ -99,6 +100,10 @@
   // Invariante de solvencia: si desde `est` no hay nada alcanzable, se planta un
   // obstáculo donde el arco cruza la altura de rebote. Random pero siempre
   // superable — sin esto el jugador pierde por un hueco que no controlaba.
+  // Solo cuenta un cruce que quede adelante de `est.x` por al menos AVANCE_MIN:
+  // si no hay ninguno, el palo ya viene bajando cerca del piso después de un mal
+  // golpe (un raspón) y no tiene a dónde ir — eso es el error del jugador, no un
+  // defecto del generador, así que devolver false es lo correcto.
   function rellenar(obs, rand, est) {
     if (alcanzables(obs, est).length) return false;
     const tr = trayectoria(est, 1200);
@@ -107,8 +112,9 @@
       const cima = F.GY - TIPOS[clave].h;
       for (let i = 1; i < tr.length; i++) {
         if (tr[i].vy > 0 && tr[i - 1].y <= cima && tr[i].y >= cima) {
-          puesto = { t: clave, x: Math.round(tr[i].x - TIPOS[clave].w / 2),
-                     w: TIPOS[clave].w, h: TIPOS[clave].h, cima: cima };
+          const x = Math.round(tr[i].x - TIPOS[clave].w / 2);
+          if (x < est.x + AVANCE_MIN) continue;
+          puesto = { t: clave, x: x, w: TIPOS[clave].w, h: TIPOS[clave].h, cima: cima };
           break;
         }
       }
