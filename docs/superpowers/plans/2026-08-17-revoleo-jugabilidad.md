@@ -238,7 +238,19 @@ objetivo siguiente. Sin esto, el jugador pierde por huecos que no controlaba.
   - `alcanzables(obs, est)` → `Array` de obstáculos que la trayectoria desde `est`
     cruza a la altura de su `cima`.
   - `rellenar(obs, rand, est)` → muta `obs` agregando un obstáculo alcanzable si no
-    había ninguno. Devuelve `true` si tuvo que agregar.
+    había ninguno. Devuelve `'ya-habia'`, `'planto'` o `'sin-salida'`.
+
+    **No devuelve booleano a propósito.** Un `false` significaría dos cosas
+    opuestas —«no hacía falta» y «no hay salida»— y quien llama necesita
+    distinguirlas: la primera sigue el vuelo, la segunda lo termina.
+
+    **Sólo planta si `est.vy < 0`**, es decir sólo después de un rebote que
+    devolvió altura. Con un estado descendiendo devuelve `'sin-salida'` sin
+    plantar. Esto es la invariante del spec escrita en código: se garantiza
+    solvencia desde un rebote exitoso, no desde un raspón. Sin ese guardia
+    `rellenar` planta siempre, el palo rebota incluso después de un raspón y el
+    vuelo **nunca termina** — un jugador malo volaría para siempre y se destruye
+    la gradiente de destreza, que es justo lo que este rediseño viene a arreglar.
 
 - [ ] **Step 1: Escribir el test que falla**
 
@@ -682,6 +694,12 @@ Agregar estos métodos a la clase, justo antes de `endShot(kind)`:
   // uno: la invariante de solvencia evita perder por un hueco que no controlabas.
   buscarObjetivo(){const g=this.g,c=g.club;if(!c)return;
     const est={x:c.x,y:c.y,vx:c.vx,vy:c.vy};
+    // Se ignora a propósito lo que devuelve rellenar: la decisión de terminar el
+    // vuelo sale de que alcanzables quede vacío, no del string. El string existe
+    // para que el test de la invariante pueda observar qué camino tomó — sin él no
+    // habría forma de verificar que a un raspón no se le regala salida.
+    // 'sin-salida' sólo pasa viniendo de un raspón: el palo baja, no alcanza nada,
+    // se deja caer y el vuelo termina al tocar el suelo.
     Motor.rellenar(g.obs,g.rand,est);
     const alc=Motor.alcanzables(g.obs,est);
     g.objetivo=alc.length?alc[0]:null;
@@ -753,7 +771,44 @@ node test-db.js "Revolea el Palo.dc.html"
 
 Esperado: los cuatro en verde.
 
-- [ ] **Step 5: Ajustar el umbral de poda de `test-motor.js`**
+- [ ] **Step 5: Hacer que el vuelo en vivo consuma `Motor.paso()`**
+
+Sin este paso hay **dos implementaciones de la física**: `Motor.paso()` predice con
+`VX_MAX` y sin viento, y el loop en vivo integra inline con `clamp(c.vx,-16,16)` y
+suma viento. El anillo de timing sale de `pasoDeLlegada`, que usa el predictor: si
+discrepan, el anillo apunta al momento equivocado y el juego se vuelve a sentir
+azaroso. Una sola implementación o la mecánica no funciona.
+
+En `step()`, dentro de `if(g.acc>=1){`, reemplazar el bloque de integración
+—desde `const sp=Math.hypot(c.vx,c.vy),drag=...` hasta `c.x+=c.vx;c.y+=c.vy;`
+inclusive, y también el `if(c.y<50){...}` que le sigue— por:
+
+```js
+      // Una sola física: el vuelo en vivo usa el mismo paso que la predicción, así
+      // el anillo de timing no puede apuntar a un momento que no va a pasar.
+      const e=Motor.paso({x:c.x,y:c.y,vx:c.vx,vy:c.vy});
+      c.x=e.x;c.y=e.y;c.vx=e.vx;c.vy=e.vy;
+```
+
+Notar que `Motor.paso()` ya aplica el clamp del techo (`F.TECHO`), así que el
+`if(c.y<50)` desaparece por completo. El `drag` que el código viejo aplicaba sólo
+cuando `!c.grounded` ahora se aplica siempre: es correcto, porque una vez que
+`c.grounded` es `true` el vuelo terminó y este bloque no vuelve a correr.
+
+Agregar a `test-generador.js`, antes del `console.log`, la aserción que vuelve
+verdadero el comentario de `paso()`:
+
+```js
+// --- predicción y realidad no pueden divergir ---
+// El anillo de timing sale del predictor. Si el vuelo en vivo integrara distinto,
+// el anillo apuntaría a un momento que no va a pasar. Se compara paso a paso.
+const cuerpoM = require('fs').readFileSync('Revolea el Palo.dc.html', 'utf8');
+ck('el vuelo en vivo usa Motor.paso', /Motor\.paso\(/.test(cuerpoM));
+ck('no quedó integración inline duplicada',
+  !/c\.vx=clamp\(c\.vx,-16,16\)/.test(cuerpoM) && !/c\.vy\+=G\*0\.44/.test(cuerpoM));
+```
+
+- [ ] **Step 6: Ajustar el umbral de poda de `test-motor.js`**
 
 `test-motor.js` afirma `g.obs acotado (<80)`. Ese umbral asumía el generador viejo,
 que sembraba hasta 4200 px; el nuevo siembra hasta 20000 px de una, así que el pico
@@ -770,7 +825,7 @@ y en el bloque de vuelo largo, cambiar `ck('poda: g.obs acotado en vuelo largo',
 por `withCull.peak < 200`. La aserción que de verdad protege contra la fuga es la
 de al lado, la que compara con la corrida sin poda, y esa no se toca.
 
-- [ ] **Step 6: Actualizar el cartel de ayuda**
+- [ ] **Step 7: Actualizar el cartel de ayuda**
 
 En `Revolea el Palo.dc.html` y en el template de `build-app.js`, el texto del
 `rHint` durante el vuelo dice «¡Tocá la pantalla para que el palo planee!».
@@ -778,7 +833,7 @@ Cambiarlo por `'Tocá justo cuando llegue'`. Buscar también en `launch()` y en 
 bloque de `hudT` de `step()` los textos que mencionan aletazos y reemplazarlos por
 `'Combo ×'+g.combo`.
 
-- [ ] **Step 7: Regenerar, correr todo y commitear**
+- [ ] **Step 8: Regenerar, correr todo y commitear**
 
 ```bash
 node build-app.js .
@@ -868,6 +923,25 @@ git commit -m "Cámara alejada, arco predicho y anillo de timing"
 ---
 
 ### Task 7: Bot de destreza y las aserciones de diseño
+
+**Dos cosas que salieron de la revisión de la Task 5 y afectan la calibración:**
+
+1. **`IMPULSO` de 7.4 se pasa mucho del techo.** Saliendo de una cima en `y≈190`
+   con el techo en `y=50`, todo rebote perfecto clava el techo y descarta el
+   excedente, así que los arcos salen casi idénticos eslabón a eslabón. Eso achata
+   el desafío de timing y hace monótono el vuelo. Al calibrar, considerar bajar
+   `IMPULSO` hasta que el arco perfecto quede por debajo del techo y la altura sea
+   una consecuencia del acierto y no un valor fijo.
+2. **Aviso retirado.** Acá decía que los obstáculos no-objetivo seguían siendo
+   paredes y contaminarían la medición de señal/ruido. **Se midió y es falso:** la
+   rama de choque corre 0 veces en 80 vuelos (ver el ítem 1 de la Task 8). No hay
+   esa fuente de ruido. Si señal/ruido falla, no la busques ahí.
+
+   Lo que sí queda como fuente de varianza legítima es el escenario aleatorio: qué
+   tipos de obstáculo toca y a qué separación, que es lo que la regla de variedad
+   convierte en decisión en vez de suerte. Si la señal/ruido no llega a 3, el
+   sospechoso son las ventanas de timing (demasiado anchas ⇒ todos aciertan igual)
+   o `factorVariedad` ahogando el score, en ese orden.
 
 El test que contesta «¿esto premia destreza?» con números en vez de opinión.
 
@@ -1003,6 +1077,37 @@ git commit -m "Bot de destreza: monotonía, señal/ruido y ausencia de techo"
 ---
 
 ### Task 8: Limpieza, migración a v5 y recalibración de leyendas
+
+**Cuatro items que agregó la revisión de la Task 5** y que hay que borrar acá:
+
+1. **La rama de choque del vuelo no se ejecuta nunca: es código muerto.**
+   Ojo, la primera versión de este ítem decía que los obstáculos no-objetivo
+   «siguen siendo paredes que inyectan azar». **Eso era falso** y se midió:
+   instrumentada, la rama corre **0 veces** en 80 vuelos (40 sin tocar y 40 con
+   toques a destiempo). La razón es que `hit()` exige que el palo esté por debajo
+   del techo del obstáculo, y el único obstáculo en el que puede estar adentro es
+   el objetivo, que quedó exento; si pasa de largo sin tocar, llega al suelo antes
+   de alcanzar el siguiente.
+
+   Así que **no hay una fuente de ruido viva que sacar** — hay código inalcanzable
+   que borrar. Se saca igual por dos razones: es muerto, y si alguna vez se
+   disparara haría que el mismo árbol sea trampolín o pared según cuál eligió
+   `alcanzables[0]`, que contradice el diseño. Notar que «0 en 80 vuelos» es
+   medición y no demostración: el camino existe en teoría.
+
+   Sacar la rama de choque, y con ella `bail()` y `c.crashed` si quedan sin uso.
+   El truco AL RAS del mismo bucle **sí** puede dispararse (roce por encima de un
+   no-objetivo): decidir si se conserva, no borrarlo por arrastre.
+2. **`o.hit=true` en un rebote** hace que un trampolín en el que caíste se dibuje
+   con la paleta de «golpeado». Si el bucle de colisión se va, revisar que `o.hit`
+   siga significando algo o borrarlo también.
+3. **La tarjeta de onboarding miente.** Dice «clavarla en el green multiplica todo»,
+   que es falso desde que el green quedó cosmético, y no menciona tocar para
+   rebotar, que es la mecánica central. Reescribir los tres pasos numerados en el
+   `.dc.html` y en el template de `build-app.js`.
+4. **Hay dos combos distintos en pantalla a la vez:** `rMult` muestra el multiplicador
+   de trucos (`×1.4`) y `rHint` el de rebotes (`Combo ×13`). Dejar uno solo, el de
+   rebotes, que es el que entra en el puntaje.
 
 Sacar todo lo que el diseño nuevo dejó sin sentido, y poner el ranking en la escala
 nueva. Es la task con más borrado que escritura.

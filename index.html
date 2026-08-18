@@ -16,6 +16,7 @@
 <link rel="preload" as="image" href="./miguelon/palo.svg">
 <link rel="preload" as="image" href="./miguelon/p_01_reposo.svg">
 <link rel="preload" as="image" href="./miguelon/p_09_carga.svg">
+<script src="motor.js"></script>
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Anton&family=Archivo:wght@400;600;700&display=swap">
 <style>
 :root{--font-display:Anton,Impact,sans-serif;--font-body:Archivo,system-ui,sans-serif;--s:1}
@@ -128,7 +129,7 @@ body{font-family:var(--font-body);color:#F4EEDA;overflow:hidden;
     </div>
     </div>
     <div style="font-family:var(--font-display);font-size:46px;line-height:.9;color:#E8C34A;text-transform:uppercase;text-align:center;margin-top:6px">Miguelón</div>
-    <div style="font:400 12px/1.5 var(--font-body);color:rgba(244,238,218,.78);text-align:center;max-width:264px;margin-top:6px">Camisa hawaiana, paciencia cero. Tres tiros: encadená trucos y clavala en el green.</div>
+    <div style="font:400 12px/1.5 var(--font-body);color:rgba(244,238,218,.78);text-align:center;max-width:264px;margin-top:6px">Camisa hawaiana, paciencia cero. Un solo revoleo: tocá a tiempo en cada rebote y el palo no baja más.</div>
     <div id="recordLine" class="hide" style="background:#E8C34A;color:#14402A;font-family:var(--font-display);font-size:13px;letter-spacing:.08em;padding:3px 11px;text-transform:uppercase;margin-top:10px"></div>
     <button id="btnQuien" style="display:flex;align-items:center;gap:8px;background:rgba(12,43,28,.5);border:1px solid rgba(244,238,218,.25);border-radius:999px;padding:7px 14px;margin-top:8px;cursor:pointer;color:#F4EEDA;font-family:var(--font-display);font-size:13px;line-height:1;text-transform:uppercase">
       <span id="quienSoy"></span>
@@ -140,20 +141,9 @@ body{font-family:var(--font-body);color:#F4EEDA;overflow:hidden;
   <!-- ── juego ──────────────────────────────────────────────── -->
   <div class="screen hide" id="scr-play" style="touch-action:none">
     <canvas id="cv" aria-hidden="true" style="position:absolute;inset:0;width:100%;height:100%;display:block;image-rendering:pixelated;touch-action:none"></canvas>
-    <div style="position:absolute;top:calc(24px + env(safe-area-inset-top));left:14px;right:14px;display:flex;justify-content:space-between;align-items:flex-start;pointer-events:none">
-      <div style="background:rgba(12,43,28,.72);border-radius:12px;padding:7px 11px;display:flex;flex-direction:column;gap:3px">
-        <div style="font:600 8px/1 var(--font-body);letter-spacing:.18em;color:#6FAE87;text-transform:uppercase">Tiro</div>
-        <div id="rShot" style="font-family:var(--font-display);font-size:19px;line-height:1;color:#F4EEDA">1/3</div>
-      </div>
-      <div style="background:rgba(12,43,28,.72);border-radius:12px;padding:7px 11px;display:flex;flex-direction:column;gap:3px;align-items:flex-end">
-        <div style="font:600 8px/1 var(--font-body);letter-spacing:.18em;color:#6FAE87;text-transform:uppercase">Viento</div>
-        <div id="rWind" style="font-family:var(--font-display);font-size:19px;line-height:1;color:#E8C34A">→ 0</div>
-      </div>
-    </div>
     <div style="position:absolute;top:170px;right:12px;display:flex;flex-direction:column;align-items:flex-end;gap:6px;pointer-events:none">
       <div id="rMetros" style="font-family:var(--font-display);font-size:44px;line-height:1.05;color:#F4EEDA;background:rgba(12,43,28,.82);border-radius:14px;padding:6px 14px 8px;opacity:0">0 M</div>
       <div id="rBest" style="font:600 9px/1 var(--font-body);letter-spacing:.16em;color:rgba(244,238,218,.85);text-transform:uppercase;background:rgba(12,43,28,.82);border-radius:9px;padding:5px 9px">Total 0 pts</div>
-      <div id="rMult" style="font-family:var(--font-display);font-size:20px;line-height:1;color:#E8C34A;background:rgba(12,43,28,.86);border-radius:11px;padding:5px 11px;opacity:0">+0 ×1.0</div>
       <div id="rTricks" style="font:600 8px/1.4 var(--font-body);letter-spacing:.12em;color:#F4EEDA;text-transform:uppercase;background:rgba(12,43,28,.86);border-radius:9px;padding:5px 9px;max-width:150px;text-align:right;opacity:0"></div>
     </div>
     <div id="rGrito" style="position:absolute;left:22px;top:404px;max-width:196px;background:#F4EEDA;color:#0C2B1C;font-family:var(--font-display);font-size:19px;line-height:1.08;padding:10px 14px 11px;border-radius:16px 16px 16px 4px;box-shadow:0 4px 0 rgba(12,43,28,.35);opacity:0;pointer-events:none;transform-origin:8% 100%"></div>
@@ -172,7 +162,7 @@ body{font-family:var(--font-body);color:#F4EEDA;overflow:hidden;
         </div>
       </div>
       <div style="position:absolute;left:0;right:0;bottom:calc(24px + env(safe-area-inset-bottom));display:flex;justify-content:center;animation:sheetUp .28s cubic-bezier(.2,.9,.3,1.2) both">
-        <button class="btn" id="btnNext">Siguiente tiro</button>
+        <button class="btn" id="btnNext">Ver ranking</button>
       </div>
     </div>
   </div>
@@ -230,15 +220,36 @@ const INSULTS={
 "Censurado":["¡LA P*TA MADRE!","¡LA C*NCHA DE LA LORA!","¡ANDÁ A LA M*ERDA!","¡ME C*GO EN TODO!","¡LA P*TA QUE TE PARIÓ!","¡QUÉ M*ERDA HICE!","¡SOY UN PELOT*DO!","¡AL C*RAJO EL PALO!"],
 "Eufemismo":["¡ANDÁ A CAGAR, PAR 3!","¡MI ABUELA PEGA MEJOR!","¡ESTE PALO ESTÁ FALLADO!","¡ME VUELVO AL ASADO!","¡EL CAMPO ESTÁ TORCIDO!","¡BASTA DE GOLF!","¡QUE SE LO LLEVE EL VIENTO!"]};
 const SDGA_EMOJI=["🗿","🦉","🦅","💩","🇮🇪","🥃","🐕","📺"];
-const RECORDS=[["🗿","El Moai",13480],["🦉","El Búho",11720],["🦅","El Águila",10240],["🥃","Whisky",8930],["🐕","Gonza",7460],["💩","El Bosta",5980],["🇮🇪","Irlandés",4310],["📺","La Tele",2150]];
+// Ranking de relleno, en la escala NUEVA. Los valores viejos (2.150..13.480) eran de la
+// fórmula de tres tiros con multiplicadores: contra los cientos de miles que da la cadena
+// de rebotes, cualquier vuelo decente barría a los ocho de una y el ranking no medía nada.
+// Escalonados entre la mediana del bot con 120 ms de error (22.851, redondeada a centenas:
+// el escalón de entrada, ya hay que encadenar para pasarlo) y tres veces la del bot
+// impecable (3 × 507.012 = 1.521.036: arriba del techo humano, para que quede a quién
+// perseguir), con los seis del medio repartidos parejo. Los números salen de la línea de
+// medianas que imprime test-destreza.js: si la calibración se mueve, se rehacen de ahí.
+const RECORDS=[["🗿","El Moai",1521000],["🦉","El Búho",1307000],["🦅","El Águila",1093000],
+  ["🥃","Whisky",879000],["🐕","Gonza",664900],["💩","El Bosta",450900],
+  ["🇮🇪","Irlandés",236900],["📺","La Tele",22900]];
 const AVATARS=["🗿","🦉","🦅","💩","🇮🇪","🥃","🐕","📺","⛳","🏌️","🍖","🧉","🐊","👑","🔥","🤬"];
-const DB_KEY='sdga-palo-v4';
+const DB_KEY='sdga-palo-v5';
 // Base de jugadores y puntajes. ponytail: localStorage — una fila pesa ~60 bytes
 // contra un cupo de ~5 MB, así que el techo real no es el tamaño sino que es POR
 // DISPOSITIVO: no hay ranking compartido entre celulares. Si hace falta eso, se
 // reemplazan estas 4 funciones por fetch a un backend; la forma de los datos no cambia.
 const DB={
+  // Migración de v4: los nombres y emojis se conservan, pero los puntajes de la
+  // fórmula vieja no son comparables con los de la nueva, así que arrancan en 0.
+  migrar(){try{
+    if(localStorage.getItem(DB_KEY))return;
+    const v=JSON.parse(localStorage.getItem('sdga-palo-v4'));
+    if(!v||!v.players)return;
+    this.write({players:v.players.map(p=>({id:p.id,name:p.name,emoji:p.emoji,
+      best:0,rondas:0,visto:p.visto||Date.now()})),scores:[]});
+  }catch(e){}},
   read(){try{const d=JSON.parse(localStorage.getItem(DB_KEY));if(d&&d.players&&d.scores)return d}catch(e){}
+    this.migrar();
+    try{const d=JSON.parse(localStorage.getItem(DB_KEY));if(d&&d.players&&d.scores)return d}catch(e){}
     return {players:[],scores:[]}},
   write(d){try{localStorage.setItem(DB_KEY,JSON.stringify(d))}catch(e){}},
   add(name,emoji){const d=this.read();
@@ -271,15 +282,15 @@ const VUELO=0.55;
 class Component extends DCLogic{
   // arranca en el selector: 'quien' si ya hay jugadores guardados, 'nuevo' la primera vez
   state={screen:DB.read().players.length?'quien':'nuevo',player:null,nombre:'',emoji:AVATARS[0],
-    shot:1,best:0,record:0,points:0,bails:0,showRes:false,res:null};
+    best:0,record:0,points:0,showRes:false,res:null};
   acc=0;lastT=0;lastTick=0;raf=0;wd=0;
-  cv=React.createRef();rShot=React.createRef();rWind=React.createRef();rMetros=React.createRef();
-  rBest=React.createRef();rGrito=React.createRef();rFloat=React.createRef();rHint=React.createRef();rMult=React.createRef();rTricks=React.createRef();
+  cv=React.createRef();rMetros=React.createRef();
+  rBest=React.createRef();rGrito=React.createRef();rFloat=React.createRef();rHint=React.createRef();rTricks=React.createRef();
 
   componentDidMount(){
     this.imgs={};this.red={};
     POSES.forEach(n=>{const i=new Image();i.decoding='async';i.src='miguelon/'+n+'.svg';this.imgs[n]=i});
-    this.g={phase:'ready',t0:0,power:0,angle:45,manual:false,club:null,obs:[],bunkers:[],wind:0,mult:1,cam:0,rageT:0,fx:[],dust:[],helpers:[],ball:null};
+    this.g={phase:'ready',t0:0,power:0,club:null,obs:[],cam:0,rageT:0,fx:[],dust:[],helpers:[],ball:null};
     this.mkClubSprite();
     // Un tick = 0..MAXSTEPS pasos de lógica de 16.67 ms + un solo dibujo. Antes
     // era un step() por frame de rAF, así que el juego iba al doble de velocidad
@@ -308,12 +319,14 @@ class Component extends DCLogic{
       else{try{this._ac&&this._ac.resume()}catch(e){}}};
     document.addEventListener('visibilitychange',this.onVis);
     // Sólo mientras se juega: si no, el preventDefault del espacio impide escribir
-    // el nombre en el alta de jugador y las flechas mueven el ángulo desde los menús.
+    // el nombre en el alta de jugador.
     this.jugando=()=>this.state.screen==='play';
+    // Mismo reparto que onDown: en el aire el espacio es el TOQUE, que es la única
+    // mecánica del juego. Sin esto el teclado podía lanzar y después no hacer nada.
     this.kd=e=>{if(!this.jugando())return;
-      if(e.code==='Space'&&!e.repeat){e.preventDefault();this.begin()}
-      if(e.code==='ArrowUp'){this.g.manual=true;this.g.angle=clamp(this.g.angle+4,15,70)}
-      if(e.code==='ArrowDown'){this.g.manual=true;this.g.angle=clamp(this.g.angle-4,15,70)}};
+      if(e.code==='Space'&&!e.repeat){e.preventDefault();
+        if(this.g&&this.g.phase==='fly'&&this.g.club&&!this.g.club.grounded){this.tocar();return}
+        this.begin()}};
     this.ku=e=>{if(!this.jugando())return;if(e.code==='Space'){e.preventDefault();this.fire()}};
     window.addEventListener('keydown',this.kd);window.addEventListener('keyup',this.ku);
     this.firstTap=()=>{window.removeEventListener('pointerdown',this.firstTap);
@@ -382,7 +395,6 @@ class Component extends DCLogic{
     this.ctx.drawImage(s,ox,oy,w,h);
     const gp=GRIP[n];if(gp&&cr!==false)this.drawClub(ox+gp[0]*(w/MW),oy+gp[1]*(h/MH),cr===undefined?gp[2]:cr);}
   insults(){return INSULTS[this.props.censura]||INSULTS["Sin filtro"]}
-  shots(){return this.props.tiros||3}
   now(){return performance.now()}
 
   audio(){if(this._ac)return this._ac;
@@ -444,34 +456,31 @@ class Component extends DCLogic{
     try{const p=this._introAudio.play();if(p&&p.catch)p.catch(()=>{});}catch(e){}}
   stopMusic(){if(this._introAudio){try{this._introAudio.pause();}catch(e){}}if(this._titleAudio){try{this._titleAudio.pause();}catch(e){}}}
 
-  newShot(intro){
-    const g=this.g;g.power=0;g.angle=45;g.manual=false;g.club=null;g.mult=1;g.cam=0;g.rageT=0;g.fx=[];g.dust=[];g.helpers=[];
-    g.wind=this.props.viento===false?0:Math.round(rnd(-14,14));
-    g.greenX=TEE+200*PXM;
+  newShot(){
+    const g=this.g;g.power=0;g.club=null;g.cam=0;g.rageT=0;g.fx=[];g.dust=[];g.helpers=[];
     g.greens=[];for(let gm=200;gm<=1200;gm+=200)g.greens.push(TEE+gm*PXM);
-    const obs=[];let x=430;
-    while(x<4200){if(!this.inGreen(x)){const r=Math.random();
-      if(r<.32)obs.push({t:'tree',x:x,w:26,h:46});
-      else if(r<.5)obs.push({t:'cart',x:x,w:30,h:20});
-      else if(r<.68)obs.push({t:'caddie',x:x,w:16,h:30});
-      else obs.push({t:'sdga',x:x,w:18,h:30,who:SDGA_EMOJI[(Math.random()*8)|0]});}
-      x+=rnd(210,420);}
-    g.obs=obs;
-    g.putted=false;
-    g.combo={pts:0,mult:1,items:[],bailed:false};
+    g.rand=Motor.lcg((Math.random()*0x7fffffff)|0);
+    g.obs=Motor.generar(g.rand,430,20000);
+    g.combo=1;g.puntos=0;g.ultimosTipos=[];g.objetivo=null;g.xTramo=TEE;
+    // Los trucos son SÓLO nombres: adorno que cuenta qué le pasó al palo. El
+    // multiplicador y los puntos que traían no entraban en el puntaje desde que la
+    // cadena de rebotes es la única fuente, y mostrarlos al lado del combo de rebotes
+    // ponía dos combos distintos en pantalla diciendo cosas distintas.
+    g.trucos=[];
     const pel=[],nut=[],zor=[];
     for(let px2=200;px2<4200;px2+=rnd(240,460))if(!this.inGreen(px2))pel.push({x:px2,y:rnd(62,124),ph:Math.random()*6});
     for(let nx2=300;nx2<4200;nx2+=rnd(380,700))if(!this.inGreen(nx2))nut.push({x:nx2,ph:Math.random()*6});
     for(let zx=520;zx<4200;zx+=rnd(600,1100))if(!this.inGreen(zx))zor.push({x:zx,ph:Math.random()*6});
     g.pel=pel;g.nut=nut;g.zor=zor;
     this.paintCombo();
-    const bk=[];let bx=260;
-    while(bx<4200){if(Math.random()<.45&&g.greens.every(gx=>Math.abs(bx+30-gx)>200))bk.push({x:bx,w:rnd(34,62)});bx+=rnd(230,380)}
-    g.bunkers=bk;
-    this.txt(this.rWind,(g.wind<0?'← ':'→ ')+Math.abs(g.wind));
     this.op(this.rMetros,'0');
     this.op(this.rBest,'1');
-    if(intro){g.phase='intro';g.t0=this.now();g.ball={x:TEE+9,y:GY-2,vx:0,rolling:false,hop:0};
+    // La intro guionada (el putt que se pasa de largo) cuenta por qué Miguelón revolea el
+    // palo, y eso se cuenta UNA vez por sesión: son 3 a 5 segundos, y en un juego cuyo
+    // gancho es "una más y listo" pagarlos en cada reintento es la peor parte del trato.
+    // El reintento cae directo en 'ready', con el dedo ya listo para cargar.
+    if(!this.introVista){this.introVista=true;
+      g.phase='intro';g.t0=this.now();g.ball={x:TEE+9,y:GY-2,vx:0,rolling:false,hop:0};
       g.puttLong=Math.random()<.5;g.ballV=g.puttLong?rnd(1.25,1.45):rnd(0.58,0.72);
       this.txt(this.rHint,'Este putt es para ganar el hoyo…');}
     else{g.phase='ready';g.ball=null;this.setHint()}
@@ -489,8 +498,8 @@ class Component extends DCLogic{
   prune(a){let w=0;for(let i=0;i<a.length;i++){const f=a[i];if(--f.t>0)a[w++]=f}a.length=w}
 
   begin(){const g=this.g;if(!g||g.phase!=='ready'||this.state.screen!=='play')return;
-    g.phase='charge';g.t0=this.now();g.manual=false;this.sfxCharge();this.heliOn();
-    this.txt(this.rHint,'Soltá en el pico y con el ángulo justo');}
+    g.phase='charge';g.t0=this.now();this.sfxCharge();this.heliOn();
+    this.txt(this.rHint,'Soltá en el pico de potencia');}
   fire(){
     const g=this.g;if(!g||g.phase!=='charge')return;this.heliOff();
     g.phase='swing';g.t0=this.now();g.locked=g.power;g.perfect=g.power>.9;g.relSpin=g.spin||0;
@@ -499,84 +508,131 @@ class Component extends DCLogic{
   showGrito(txt){const el=this.rGrito.current;if(!el)return;this.sfxGrito();el.textContent=txt;el.style.animation='none';void el.offsetWidth;el.style.animation='gritoPop 1.9s ease-out forwards'}
   showFloat(txt){const el=this.rFloat.current;if(!el)return;el.textContent=txt;el.style.animation='none';void el.offsetWidth;el.style.animation='floatUp 1.4s ease-out forwards'}
 
-  nearGreen(x){const gs=this.g.greens||[this.g.greenX];let best=gs[0];
-    for(const gx of gs)if(Math.abs(gx-x)<Math.abs(best-x))best=gx;return best}
-
-  trick(name,pts,mAdd){const g=this.g,cb=g.combo;if(!cb||cb.bailed)return;
-    cb.pts+=pts;cb.mult=Math.round((cb.mult+mAdd)*10)/10;
-    const prev=cb.items[cb.items.length-1];
-    if(prev&&prev.name===name)prev.n++;else cb.items.push({name:name,n:1});
+  // Un truco es un nombre y nada más: no suma puntos ni multiplica. El único número
+  // del HUD es el combo de rebotes, que es el que entra en el puntaje.
+  trick(name){const cb=this.g.trucos;if(!cb)return;
+    const prev=cb[cb.length-1];
+    if(prev&&prev.name===name)prev.n++;else cb.push({name:name,n:1});
     this.sfxTrick();
-    if(cb.items.length>4)cb.items.shift();
+    if(cb.length>4)cb.shift();
     this.paintCombo();}
-  bail(){const g=this.g,cb=g.combo;if(!cb||cb.bailed)return;
-    cb.bailed=true;cb.mult=Math.max(1,Math.round(cb.mult*5)/10);this.paintCombo();this.sfxBail();this.showFloat('¡SE CORTÓ EL COMBO!')}
-  paintCombo(){const cb=this.g.combo,el=this.rTricks.current,ml=this.rMult.current;if(!el||!ml)return;
-    if(!cb||!cb.items.length){this.txt(this.rTricks,'');this.op(this.rTricks,'0');this.op(this.rMult,'0');return}
-    this.op(this.rTricks,'1');this.op(this.rMult,'1');
-    this.txt(this.rTricks,cb.items.map(i=>i.name+(i.n>1?' ×'+i.n:'')).join('  ·  '));
-    this.txt(this.rMult,cb.bailed?'COMBO CORTADO':'+'+cb.pts+'  ×'+cb.mult.toFixed(1));
-    const col=cb.bailed?'#BC4B3C':'#E8C34A';if(ml.__c!==col){ml.__c=col;ml.style.color=col}}
+  paintCombo(){const cb=this.g.trucos;if(!this.rTricks.current)return;
+    if(!cb||!cb.length){this.txt(this.rTricks,'');this.op(this.rTricks,'0');return}
+    this.op(this.rTricks,'1');
+    this.txt(this.rTricks,cb.map(i=>i.name+(i.n>1?' ×'+i.n:'')).join('  ·  '));}
 
   launch(){
-    const g=this.g,a=g.angle*Math.PI/180,v=5.4+(g.locked*(g.perfect?1.12:1))*8.6;
+    // El ángulo y la velocidad salen de Motor y no de cuentas acá: el presupuesto de
+    // legibilidad se mide con esa combinación (es la única vx del juego que supera
+    // VX_MAX), y escritos en los dos lados el modelo y el juego se separan en silencio.
+    // Lo único que el jugador decide del lanzamiento es la potencia.
+    const g=this.g,a=Motor.F.ANG_LANZ,v=Motor.vLanzamiento(g.locked,g.perfect);
     g.club={x:TEE+8,y:GY-44,vx:Math.cos(a)*v,vy:-Math.sin(a)*v,rot:-a,
-      spin:Math.max(.22,.19+g.locked*.24),grounded:false,trail:[],lastFlap:this.now()+120};
-    g.phase='fly';g.flyT=0;g.mult=1;g.rageT=240;g.air=3;
-    this.txt(this.rHint,'¡Tocá la pantalla para que el palo planee!');g.fx.push({x:TEE+14,y:GY-42,t:20});g.shake=7;this.sfxLaunch();
+      spin:Math.max(.22,.19+g.locked*.24),grounded:false,trail:[]};
+    g.phase='fly';g.flyT=0;g.pasosVuelo=0;g.rageT=240;
+    this.txt(this.rHint,'Tocá justo cuando llegue');g.fx.push({x:TEE+14,y:GY-42,t:20});
+    // El shake más grande de todos, y Motor.adelante le descuenta al presupuesto de
+    // legibilidad justo este: si acá se sube el número, hay que subir F.SHAKE_MAX.
+    g.shake=Motor.F.SHAKE_MAX;this.sfxLaunch();
     if(g.perfect)this.showFloat('¡PERFECTO!');
     this.op(this.rMetros,'1');
+    this.buscarObjetivo();
   }
-  endShot(kind){
+  // El objetivo es el primer obstáculo que el arco actual cruza a la altura de su
+  // cima. Se recalcula tras cada rebote, y si no hay ninguno el generador planta
+  // uno: la invariante de solvencia evita perder por un hueco que no controlabas.
+  buscarObjetivo(){const g=this.g,c=g.club;if(!c)return;
+    const est={x:c.x,y:c.y,vx:c.vx,vy:c.vy};
+    // Se ignora a propósito lo que devuelve rellenar: la decisión de terminar el
+    // vuelo sale de que alcanzables quede vacío, no del string. El string existe
+    // para que el test de la invariante pueda observar qué camino tomó — sin él no
+    // habría forma de verificar que a un raspón no se le regala salida.
+    // 'sin-salida' sólo pasa viniendo de un raspón: el palo baja, no alcanza nada,
+    // se deja caer y el vuelo termina al tocar el suelo.
+    Motor.rellenar(g.obs,g.rand,est);
+    const alc=Motor.alcanzables(g.obs,est);
+    g.objetivo=alc.length?alc[0]:null;
+    g.pasoObjetivo=g.objetivo?this.pasoDeLlegada(est,g.objetivo):null;}
+
+  // En qué paso de física el arco llega a la cima del objetivo. De acá sale el
+  // centro de la ventana de toque. El valor es relativo al paso actual del vuelo.
+  // Usa Motor.cruzaCima, el MISMO test que alcanzables: escrito a mano quedaba más
+  // estricto (exigía que el paso cayera dentro del obstáculo en vez de que el
+  // segmento lo solapara) y un cruce rápido sobre un obstáculo angosto salía
+  // elegido como objetivo pero sin paso de llegada, así que tocar() no hacía nada.
+  // Es la misma divergencia que la Task 3 mató extrayendo cruzaCima.
+  pasoDeLlegada(est,o){const tr=Motor.trayectoria(est,1200);
+    for(let i=1;i<tr.length;i++)
+      if(Motor.cruzaCima(tr[i-1],tr[i],o))return (this.g.pasosVuelo||0)+i;
+    return null;}
+
+  // Toque del jugador durante el vuelo.
+  tocar(){const g=this.g,c=g.club;
+    if(!c||g.phase!=='fly'||!g.objetivo||g.pasoObjetivo==null)return;
+    const desfase=(g.pasosVuelo-g.pasoObjetivo)*(Motor.F.STEP/Motor.F.VUELO);
+    this.aplicarRebote(desfase);}
+
+  aplicarRebote(desfaseMs){const g=this.g,c=g.club,o=g.objetivo;
+    const r=Motor.resolverRebote({x:c.x,y:c.y,vx:c.vx,vy:c.vy},desfaseMs);
+    // se acredita con el combo vigente ANTES de aplicar el resultado
+    const tramo=Motor.metros(c.x)-Motor.metros(g.xTramo);
+    const factor=Motor.factorVariedad(g.ultimosTipos,o?o.t:'');
+    g.puntos+=Math.round(Motor.acreditar(g.combo,tramo)*factor);
+    g.xTramo=c.x;
+    g.combo=Motor.comboTras(g.combo,r.tipo);
+    c.vy=r.vy;c.vx=r.vx;c.grounded=false;
+    // INERTE, no `hit`: el trampolín en el que caíste bien no se dibuja con la paleta
+    // de "golpeado" —era un éxito, no un choque— pero tampoco puede volver a ser pared
+    // mientras el palo sale de su caja. `inerte` es exactamente eso: deja de chocar y
+    // se sigue dibujando entero. `hit` queda sólo para los choques de verdad.
+    if(o){g.ultimosTipos.push(o.t);if(g.ultimosTipos.length>4)g.ultimosTipos.shift();
+      o.inerte=true;g.fx.push({x:c.x,y:c.y,t:16});}
+    if(r.tipo==='perfecto'){this.sfxTrick();this.showFloat('+'+g.puntos+'  ×'+g.combo)}
+    else if(r.tipo==='raspon'){this.sfxBail();this.showFloat('¡RASPÓN!')}
+    else this.sfxLand();
+    g.shake=r.tipo==='perfecto'?4:6;
+    this.buscarObjetivo();}
+
+  endShot(){
     const g=this.g;g.phase='done';
     const m=Math.round(Math.max(0,(g.club.x-TEE)/PXM));
-    const dx=Math.abs(g.club.x-this.nearGreen(g.club.x)),cb=g.combo;
-    let gMult=1,zona='Cayó en el rough';
-    if(kind==='bunker'){zona='Enterrado en el bunker'}
-    else if(dx<=10){gMult=5;zona='¡LA EMBOCÓ EN EL HOYO! ×5'}
-    else if(dx<=34){gMult=3;zona='¡CLAVADA JUNTO AL PALO! ×3'}
-    else if(dx<=85){gMult=2;zona='Anillo del medio ×2'}
-    else if(dx<=150){gMult=1.5;zona='Pisó el green ×1.5'}
-    const perf=g.perfect?1.1:1;
-    let shotPts=Math.round((m+cb.pts)*cb.mult*gMult*perf);
-    if(kind==='bunker')shotPts=Math.round(shotPts/2);
-    if(gMult>=5)this.sfxHole();else if(gMult>1)this.sfxGreen();else this.sfxLand();
-    const bails=this.state.bails+(cb.bailed?1:0);
-    const last=this.state.shot>=this.shots();
-    let clean=0;
-    if(last&&bails===0){clean=500;shotPts+=500}
-    const total=this.state.points+shotPts;
-    const best=Math.max(this.state.best,m);
-    if(total>this.state.record)this.setState({record:total});
-    let tag;
-    if(kind==='bunker')tag='LA ARENA SE LO COMIÓ';
-    else if(shotPts<1000)tag='QUÉ VERGÜENZA';
-    else if(shotPts<2500)tag='ZAFA';
-    else if(shotPts<5000)tag='BUEN REVOLEO';
-    else if(shotPts<9000)tag='TREMENDO';
-    else tag='HISTÓRICO';
+    const tramo=Motor.metros(g.club.x)-Motor.metros(g.xTramo);
+    const pts=g.puntos+Motor.acreditar(g.combo,tramo);
+    if(pts>this.state.record)this.setState({record:pts});
+    // UN solo escalonado, para la leyenda y para la fanfarria. Sale de la curva de
+    // destreza MEDIDA (medianas de puntos por error de timing del bot: 200 ms=843,
+    // 120 ms=22.851, 60 ms=337.175, 0 ms=507.012), así que cada leyenda nombra la banda
+    // de precisión en la que cayó el vuelo. Los umbrales viejos (1000/2500/5000/9000)
+    // eran de la escala de tres tiros con multiplicadores: contra los cientos de miles
+    // de ahora, TODO vuelo que encadenaba dos rebotes salía 'HISTÓRICO'.
+    // La fanfarria se cuelga de ACÁ y no del green: festeja el puntaje, que es lo que el
+    // jugador se ganó.
+    const NIVELES=[[800,'QUÉ VERGÜENZA'],[22900,'ZAFA'],[337000,'BUEN REVOLEO'],
+      [507000,'TREMENDO'],[Infinity,'HISTÓRICO']];
+    const nivel=NIVELES.findIndex(n=>pts<n[0]),tag=NIVELES[nivel][1];
+    if(nivel>=3)this.sfxHole();else if(nivel>=1)this.sfxGreen();else this.sfxLand();
+    // El chip dorado dice cómo se terminó la cadena, que es lo único cierto del final de
+    // un vuelo. Antes decía la zona del green, y era un cartel que se contradecía solo:
+    // los greens terminan a los 1.200 m y los vuelos reales llegan a decenas de miles,
+    // así que TODO vuelo competente leía 'Cayó en el rough', y uno malo que se moría al
+    // lado de un green podía sacar '¡LA EMBOCÓ EN EL HOYO!' pegado a 'QUÉ VERGÜENZA'.
+    // Tampoco se usa la palabra "anillo": ésa ya nombra el anillo de timing.
+    const cierre=g.club.crashed?'Lo frenó un obstáculo':'Se le cortó la cadena';
     const parts=[m+' m'];
-    if(cb.pts)parts.push('+'+cb.pts+' trucos');
-    if(cb.mult>1)parts.push('combo ×'+cb.mult.toFixed(1));
-    if(gMult>1)parts.push('green ×'+gMult);
-    if(g.perfect)parts.push('suelta ×1.1');
-    if(kind==='bunker')parts.push('bunker ÷2');
-    if(g.putted)parts.push('putt final');
-    if(clean)parts.push('ronda limpia +500');
+    if(g.puntos)parts.push('+'+g.puntos+' de rebotes');
+    if(g.combo>1)parts.push('combo ×'+g.combo);
     const note=parts.join(' · ');
     this.op(this.rMetros,'0');
     this.op(this.rBest,'0');
-    this.paintCombo();
-    this.op(this.rMult,'0');
     this.op(this.rTricks,'0');
-    this.setState({best:best,bails:bails,points:total,showRes:true,res:{m:shotPts+' PTS',tag:tag,note:note,pts:zona+'  ·  Total '+total,kicker:'Tiro '+this.state.shot+' de '+this.shots(),label:last?'Ver ranking':'Siguiente tiro',last:last}});
+    this.setState({best:m,points:pts,showRes:true,
+      res:{m:pts+' PTS',tag:tag,note:note,pts:cierre,kicker:'Se terminó el revoleo',label:'Ver ranking'}});
   }
+  // Un solo vuelo por ronda: del resultado se va derecho al ranking.
   next=()=>{
-    if(this.state.res&&this.state.res.last){
-      // una fila por ronda terminada: es el histórico
-      if(this.state.player)DB.save(this.state.player.id,this.state.points,this.state.best);
-      this.setState({showRes:false,screen:'rank'});return}
-    this.setState({shot:this.state.shot+1,showRes:false},()=>this.newShot(true));
+    // una fila por ronda terminada: es el histórico
+    if(this.state.player)DB.save(this.state.player.id,this.state.points,this.state.best);
+    this.setState({showRes:false,screen:'rank'});
   }
   elegir=p=>{this.setState({player:p,screen:'title',record:p.best||0,points:0,best:0})}
   setNombre=e=>this.setState({nombre:(e&&e.target?e.target.value:e)||''})
@@ -584,36 +640,16 @@ class Component extends DCLogic{
   nuevoJugador=()=>{this.sfxButton();this.setState({screen:'nuevo',nombre:'',emoji:AVATARS[0]})}
   cambiarJugador=()=>{this.sfxButton();this.stopMusic();
     this.setState({screen:DB.read().players.length?'quien':'nuevo'})}
-  start=()=>{this.sfxButton();this.fadeMusic(350);this.heliOff();this.setState({screen:'play',shot:1,best:0,points:0,bails:0,showRes:false},()=>this.newShot(true))}
-  again=()=>{this.sfxButton();this.stopMusic();this.heliOff();this.setState({screen:'play',shot:1,best:0,points:0,bails:0,showRes:false},()=>this.newShot(true))}
+  start=()=>{this.sfxButton();this.fadeMusic(350);this.heliOff();this.setState({screen:'play',best:0,points:0,showRes:false},()=>this.newShot())}
+  again=()=>{this.sfxButton();this.stopMusic();this.heliOff();this.setState({screen:'play',best:0,points:0,showRes:false},()=>this.newShot())}
   toTitle=()=>{this.setState({screen:'title'});this.startMusic();}
 
-  startPutt(){const g=this.g;g.phase='putt';g.t0=this.now();g.power=0;g.manual=false;g.shake=4;
-    this.showFloat('¡ESTÁS EN EL GREEN!');
-    this.txt(this.rHint,'Último toque: apuntá al hoyo y soltá');}
-  firePutt(){const g=this.g,c=g.club;if(!c)return;
-    const ng=this.nearGreen(c.x),dir=ng-c.x>=0?1:-1,a=g.angle*Math.PI/180,v=1.4+g.power*4.6;
-    c.vx=dir*Math.cos(a)*v;c.vy=-Math.sin(a)*v;c.grounded=false;c.crashed=false;c.spin=dir*.18;
-    g.putted=true;g.phase='fly';g.flyT=0;g.air=0;g.fx.push({x:c.x,y:c.y,t:14});
-    this.txt(this.rHint,'A ver si la clavás…');}
-
-  onDown=e=>{const g=this.g;
-    if(g&&g.phase==='putt'){g.phase='puttcharge';g.t0=this.now();g.manual=false;this.y0=e.clientY;return}
-    if(g&&g.phase==='fly'&&g.club&&!g.club.crashed&&!g.club.grounded){this.flap();return}
-    this.y0=e.clientY;this.begin()}
-  flap(){const g=this.g,c=g.club,n=this.now();if(!c)return;
-    if(n-(c.lastFlap||0)<210)return;
-    if(g.air<=0){if(!c.noAir){c.noAir=true;this.showFloat('¡SIN AIRE!')}return}
-    c.lastFlap=n;g.air--;this.sfxFlap();
-    c.vy=Math.min(c.vy,0)-1.7;c.spin=Math.min(.42,c.spin+.06);
-    g.fx.push({x:c.x-10,y:c.y+4,t:12});
-    g.helpers.push({x:c.x-16,y:c.y-2,cam0:g.cam,k:HELPER_KEYS[(Math.random()*3)|0],t:0,dir:Math.random()<.5?-1:1});
-    if(g.helpers.length>8)g.helpers.shift();
-    this.txt(this.rHint,g.air>0?('Aletazos que te quedan: '+g.air):'Se quedó sin aire. A esquivar de garrón.')}
-  onMove=e=>{const g=this.g;if(!g||(g.phase!=='charge'&&g.phase!=='puttcharge')||this.y0==null)return;
-    const d=this.y0-e.clientY;if(Math.abs(d)>6)g.manual=true;
-    if(g.manual)g.angle=clamp(45+d*.3,15,70)}
-  onUp=()=>{const g=this.g;if(g&&g.phase==='puttcharge'){this.firePutt();return}this.fire()}
+  // Un solo gesto en todo el juego: apretar y soltar para lanzar, tocar para rebotar.
+  // No hay onMove porque no hay nada que arrastrar.
+  onDown=()=>{const g=this.g;
+    if(g&&g.phase==='fly'&&g.club&&!g.club.grounded){this.tocar();return}
+    this.begin()}
+  onUp=()=>{this.fire()}
 
   hit(o,c){const bx=o.x,by=GY-o.h;return c.x>bx-4&&c.x<bx+o.w+4&&c.y>by&&c.y<GY+3}
 
@@ -633,39 +669,34 @@ class Component extends DCLogic{
       }
       if(g.missT&&this.now()-g.missT>1600){g.missT=0;g.ball=null;g.phase='ready';this.setHint()}
     }
-    if(g.phase==='putt'||g.phase==='puttcharge'){
-      const c=g.club;if(c){const ng=this.nearGreen(c.x);
-        const target=Math.max(0,(c.x+ng)/2-W/2);
-        g.cam+=(target-g.cam)*.12;}
-    }
-    if(g.phase==='charge'||g.phase==='puttcharge'){
+    if(g.phase==='charge'){
+      // Sólo carga potencia. El ángulo ya no existe como decisión: barría solo (una
+      // segunda lotería de timing arriba de la de potencia) y además se podía arrastrar
+      // entre 15° y 70°, que a 15° dejaba el juego ilegible. La destreza que este juego
+      // mide es la del toque en el aire.
       const cyc=t%2600;
       g.power=cyc<1600?cyc/1600:1-((cyc-1600)/1000)*.72;
-      if(!g.manual){const s=(t%3000)/3000,tri=s<.5?s*2:2-s*2;g.angle=22+tri*40}
     }
-    if(g.phase==='putt'&&!g.manual){const s=(t%3000)/3000,tri=s<.5?s*2:2-s*2;g.angle=22+tri*40}
     if(g.phase==='swing'&&t>90)this.launch();
     if(g.rageT>0)g.rageT--;
     if(g.phase==='fly'){
       g.acc=(g.acc||0)+VUELO;
       const c=g.club;
       if(g.acc>=1){g.acc-=1;g.flyT++;
-      const sp=Math.hypot(c.vx,c.vy),drag=1-Math.min(.007,0.0008+sp*0.0004);
-      c.vy+=G*0.44;c.vx+=g.wind*0.0009;
-      if(!c.grounded){c.vx*=drag;c.vy*=drag;}
-      c.vx=clamp(c.vx,-16,16);
-      c.x+=c.vx;c.y+=c.vy;
-      if(c.y<50){c.y=50;if(c.vy<0)c.vy=.5;
-        // Antes acá iba g.air=Math.min(g.air,1). El palo sale a y=188 y el techo
-        // está en y=50, así que TODO tiro lo tocaba y te comía 2 aletazos de una
-        // sin que tocaras la pantalla. El techo ya castiga cortando la subida.
-        if(!c.roof){c.roof=true;this.showFloat('¡ASTRONAUTA!');this.trick('ASTRONAUTA',100,.2)}}
+      g.pasosVuelo=(g.pasosVuelo||0)+1;
+      // Una sola física: el vuelo en vivo usa el mismo paso que la predicción, así
+      // el anillo de timing no puede apuntar a un momento que no va a pasar.
+      // Motor.paso ya clampea el techo (F.TECHO), así que el if(c.y<50) se fue.
+      const e=Motor.paso({x:c.x,y:c.y,vx:c.vx,vy:c.vy});
+      c.x=e.x;c.y=e.y;c.vx=e.vx;c.vy=e.vy;
+      // sp lo sigue usando el giro de abajo; es lo único que sobrevive del bloque.
+      const sp=Math.hypot(c.vx,c.vy);
       if(!c.grounded){
         // el palo tumbea cabeza-pesada: gira más rápido en la subida, se acomoda al caer
         c.spin+=(0.13+Math.min(.14,sp*0.012)-c.spin)*0.02;
         c.rot+=c.spin;
         c.rotAcc=(c.rotAcc||0)+Math.abs(c.spin);
-        if(c.rotAcc>=6.283){c.rotAcc-=6.283;this.trick('HELICÓPTERO',25,.1)}
+        if(c.rotAcc>=6.283){c.rotAcc-=6.283;this.trick('HELICÓPTERO')}
         if(g.flyT%2===0){c.trail.push({x:c.x,y:c.y,rot:c.rot});if(c.trail.length>6)c.trail.shift();}
       } else {
         c.rot+=c.spin;
@@ -677,60 +708,96 @@ class Component extends DCLogic{
         // g.obs está ordenado por x: en cuanto uno está lejos por delante, el
         // resto también. Antes se recorría el array completo en cada frame.
         if(c.x<o.x-30)break;
-        if(o.hit)continue;
-        if(!o.near&&!this.hit(o,c)&&c.x>o.x-8&&c.x<o.x+o.w+8&&c.y<GY-o.h&&c.y>GY-o.h-20){o.near=true;this.trick('AL RAS',50,.2)}
+        // inerte: el que Motor.rellenar marcó porque el objetivo plantado le cae encima.
+        // Sin esto es pared en el MISMO x en que el objetivo es plataforma, el palo
+        // rebota y se estrella en el mismo paso de física y el jugador no tiene nada
+        // que hacer al respecto. Era la única muerte de un bot impecable.
+        if(o.hit||o.inerte)continue;
+        // El objetivo es plataforma de rebote, no pared. Sin esto el choque se
+        // resolvía en el MISMO paso de física en que el palo cruza la cima, o sea
+        // antes de que el jugador pudiera tocar: le comía el 65% de vx cada vez
+        // (medido: 1,11 -> 0,29 -> 0,13 y el vuelo muerto al tercer eslabón) y
+        // dejaba inalcanzable la mitad tardía de la ventana de perfecto, que es
+        // simétrica en resolverRebote. El resto de los obstáculos sigue chocando.
+        if(o===g.objetivo)continue;
+        if(!o.near&&!this.hit(o,c)&&c.x>o.x-8&&c.x<o.x+o.w+8&&c.y<GY-o.h&&c.y>GY-o.h-20){o.near=true;this.trick('AL RAS')}
+        // NO es código muerto, aunque la Task 5 lo midiera en 0 de 80 vuelos cortos:
+        // medido en vuelos largos corre 1 o 2 veces por vuelo. Lo que castiga es real y
+        // suficiente —el choque le come el 78% de vx y casi siempre deja la cadena sin
+        // objetivo alcanzable, o sea que ahí se termina el vuelo— así que no necesita
+        // además un multiplicador que cortar.
         if(this.hit(o,c)){
           o.hit=true;
           c.crashed=true;c.vx*=.22;c.vy=Math.abs(c.vy)*.35+.6;c.spin=(Math.random()<.5?-1:1)*.34;
-          if(o.t==='tree'){this.showFloat('¡CONTRA EL ÁRBOL!');this.bail()}
-          else if(o.t==='cart'){this.showFloat('¡LE DIO AL CARRITO!');this.trick('CARRITAZO',80,.2)}
-          else if(o.t==='caddie'){this.showFloat('¡PERDÓN, CADDIE!');this.bail()}
-          else{this.showFloat('¡LE DIO A '+o.who+'!');this.trick('SDGA '+o.who,150,.3)}
+          if(o.t==='tree'){this.showFloat('¡CONTRA EL ÁRBOL!');this.sfxBail()}
+          else if(o.t==='cart'){this.showFloat('¡LE DIO AL CARRITO!');this.trick('CARRITAZO')}
+          else if(o.t==='caddie'){this.showFloat('¡PERDÓN, CADDIE!');this.sfxBail()}
+          else{const q=this.quien(o);this.showFloat('¡LE DIO A '+q+'!');this.trick('SDGA '+q)}
           g.shake=6;
           g.fx.push({x:c.x,y:c.y,t:20});
+          // El choque forkea el arco real (vx*=.22) por fuera de Motor.paso, así que
+          // el pasoObjetivo calculado antes apunta a un momento que ya no va a pasar.
+          // Sin recalcular, el toque siguiente se mide contra un arco inexistente —
+          // justo la mentira que el Step 5 vino a matar. Tras un choque alcanzables
+          // casi siempre vuelve vacío: el objetivo queda en null, el toque no hace
+          // nada y el vuelo muere en el suelo, que es lo coherente.
+          // Seguro dentro del for..of: acá c.vy=|vy|*.35+.6 es SIEMPRE > 0, así que
+          // rellenar corta por 'sin-salida' sin tocar g.obs.
+          this.buscarObjetivo();
         }
       }
       for(const p of (g.pel||[])){
         if(p.near)continue;
         const pScreen=p.x-g.cam*0.62,cScreen=c.x-g.cam;
         if(Math.abs(cScreen-pScreen)>10)continue;
-        if(Math.abs(c.y-p.y)<14){p.near=true;this.trick('PELICANAZO',75,.2);this.showFloat('¡AL RAS DEL PELÍCANO!')}
+        if(Math.abs(c.y-p.y)<14){p.near=true;this.trick('PELICANAZO');this.showFloat('¡AL RAS DEL PELÍCANO!')}
       }
       if(c.y>=GY){
         c.y=GY;
-        const inB=g.bunkers.some(b=>c.x>=b.x&&c.x<=b.x+b.w);
-        if(inB){c.vx=0;c.vy=0;this.endShot('bunker')}
-        else if(Math.abs(c.vy)>.45){
+        if(Math.abs(c.vy)>.45){
           // primer pique: clava la cabeza, salta bajo y pierde giro
           const hard=Math.abs(c.vy)>3;
           c.vy=-Math.abs(c.vy)*(hard?.28:.4);c.vx*=hard?.62:.82;
           c.spin=c.spin*.35+c.vx*.045+(Math.random()-.5)*.06;
           g.dust.push({x:c.x,y:GY,t:18});if(hard)g.dust.push({x:c.x-6,y:GY,t:14});
+          // Mismo motivo que en el choque: el pique forkea vy y vx por fuera de
+          // Motor.paso, así que hay que recalcular el objetivo. Acá vy queda < 0 y
+          // rellenar SÍ puede plantar, pero el pique NO es un rebote contra un
+          // obstáculo: queda fuera del contrato de solvencia. Que después de tocar el
+          // suelo no haya a dónde ir es un final legítimo, el vuelo ya se estaba
+          // terminando. Este comentario decía que "la invariante le corresponde" y era
+          // falso: medido, el pique aporta 95 de los 119 casos sin salida con vy < 0,
+          // así que tratarlo como incumplimiento dejaba la aserción del bot roja para
+          // siempre midiendo algo correcto.
+          this.buscarObjetivo();
         }
         else{c.grounded=true;c.vy=0;c.vx*=.88;c.spin*=.6;
-          if(Math.abs(c.vx)<.12||g.flyT>3600){
-            const ng=this.nearGreen(c.x);
-            if(!g.putted&&Math.abs(c.x-ng)<=150)this.startPutt();
-            else this.endShot('ok');
-          }}
+          if(Math.abs(c.vx)<.12||g.flyT>3600)this.endShot();}
       }
       }
+      // Un solo generador. Esto sembraba a mano y sin `cima`, así que un vuelo que
+      // pasara los 20.000 px sembrados por Motor.generar recibía obstáculos que
+      // cruzaCima nunca podía alcanzar: la cadena de rebotes se cortaba sola.
       const lastO=g.obs.length?g.obs[g.obs.length-1].x:0;
-      if(lastO-c.x<900){let nx=lastO+rnd(230,430);
-        for(let k=0;k<4;k++){if(!this.inGreen(nx)){const r=Math.random();
-          if(r<.34)g.obs.push({t:'tree',x:nx,w:26,h:46});
-          else if(r<.52)g.obs.push({t:'cart',x:nx,w:30,h:20});
-          else if(r<.7)g.obs.push({t:'caddie',x:nx,w:16,h:30});
-          else g.obs.push({t:'sdga',x:nx,w:18,h:30,who:SDGA_EMOJI[(Math.random()*8)|0]});}
-          nx+=rnd(230,430);}}
-      // El cartel de distancia y el contador de metros cambiaban de texto en cada
-      // frame, y cada escritura invalida estilo y layout. hudT cuenta pasos de
-      // lógica: 20 Hz para los metros (el palo no avanza más rápido que eso por
-      // el slomo) y 10 Hz para el cartel. Se lee igual y el layout descansa.
+      if(lastO-c.x<900)for(const o of Motor.generar(g.rand,lastO+90,lastO+2000))g.obs.push(o);
+      // El cartel del combo y el contador de metros cambiaban de texto en cada frame, y
+      // cada escritura invalida estilo y layout. hudT cuenta pasos de lógica: 20 Hz para
+      // los metros (el palo no avanza más rápido que eso por el slomo) y 10 Hz para el
+      // cartel. Se lee igual y el layout descansa.
+      // El cartel dice el combo de rebotes y la única instrucción que hay. Antes decía la
+      // distancia al green, que es cosmético: informar de él sugería que servía para algo.
       g.hudT=(g.hudT||0)+1;
-      if(g.club&&!g.club.grounded&&g.hudT%6===0){const d=(this.nearGreen(c.x)-c.x)/PXM;
-        this.txt(this.rHint,(d>0?'Green a '+Math.round(d)+' m':'Green pasado')+' · aletazos: '+g.air);}
-      g.cam+=((Math.max(0,c.x-48))-g.cam)*.09;
+      if(g.club&&!g.club.grounded&&g.hudT%6===0)
+        this.txt(this.rHint,'Combo ×'+g.combo+' · tocá en el anillo');
+      // El corrimiento sale de Motor.camObjetivo y el factor del lerp de Motor.F.SEG:
+      // son los mismos de los que Motor.adelante saca cuánto arco se ve por delante del
+      // palo, y de ahí el aviso mínimo. Escritos acá a mano, la cámara y el presupuesto
+      // de legibilidad se separan sin que nada avise.
+      // g.vxAnt: la vx del frame anterior. camObjetivo se queda con la mayor de las dos
+      // para que una frenada de golpe no le suelte la corrección más rápido de lo que la
+      // cámara puede seguir.
+      g.cam+=((Math.max(0,c.x-Motor.camObjetivo(c.vx,g.vxAnt)))-g.cam)*Motor.F.SEG;
+      g.vxAnt=c.vx;
       if(g.hudT%3===0)this.txt(this.rMetros,Math.round(Math.max(0,(c.x-TEE)/PXM))+' M');
       this.cull(g.obs,g.cam-160);
       this.cull(g.pel,g.cam*0.62-40);
@@ -738,8 +805,9 @@ class Component extends DCLogic{
       this.cull(g.zor,g.cam-60);
     }
     this.prune(g.fx);this.prune(g.dust);
-    this.txt(this.rBest,'Total '+this.state.points+' pts');
-    this.txt(this.rShot,this.state.shot+'/'+this.shots());
+    // Los puntos EN VIVO, no state.points: con un solo vuelo por ronda, state.points
+    // recién se llena en endShot, así que el cartel decía "Total 0 pts" todo el vuelo.
+    this.txt(this.rBest,'Total '+(g.puntos||0)+' pts');
   }
 
   // fillStyle es un setter que reparsea el color en cada asignación. Con ~500
@@ -756,6 +824,12 @@ class Component extends DCLogic{
         let n=1;while(rx+n<row.length&&a.p[row[rx+n]]===col)n++;
         this.px(x0+rx*s,y0+ry*s,s*n,s,col);rx+=n}}}
   get HOLE(){return TEE+62}
+  // Motor.generar y Motor.rellenar no saben de emojis, así que un obstáculo 'sdga'
+  // llega sin `who` y fillText(undefined) dibujaba literalmente "undefined". Se
+  // deriva de la x (determinista: en draw() un Math.random parpadearía por frame) y
+  // se memoiza. Va acá porque los dos lectores —draw() y el cartel del choque—
+  // pasan por este método.
+  quien(o){return o.who||(o.who=SDGA_EMOJI[Math.abs(o.x|0)%SDGA_EMOJI.length])}
 
   draw(){
     const cv=this.cv.current;if(!cv)return;
@@ -768,11 +842,26 @@ class Component extends DCLogic{
     ctx.setTransform(2,0,0,2,shk?(Math.random()-.5)*shk*2:0,shk?(Math.random()-.5)*shk*2:0);
     ctx.imageSmoothingEnabled=false;
     const cam=g.cam;
-    // Los fondos sangran 8 px fuera del canvas: con el shake el transform corre
-    // todo hasta 7 px y antes quedaba una franja sin pintar en el borde.
-    this.px(-8,-8,W+16,GY+8,'#D9E8DC');
-    this.px(-8,58,W+16,34,'#C7DFCE');
-    this.px(-8,92,W+16,26,'#B7D4C2');
+    // Durante el vuelo se aleja la cámara: con el encuadre de 134 px un obstáculo
+    // entraba en pantalla 0,16 s antes de alcanzarlo y no había cómo reaccionar.
+    const z=g.phase==='fly'?Motor.F.ZOOM_VUELO:1;
+    if(z!==1){ctx.setTransform(2/z,0,0,2/z,
+      (shk?(Math.random()-.5)*shk*2:0)+W*(z-1)/3,
+      (shk?(Math.random()-.5)*shk*2:0)+GY*(z-1)/2);}
+    // Encuadre visible en unidades lógicas, despejado del transform de arriba. Con
+    // z=1 da 0..W y 0..H, o sea lo de siempre. Se despeja y no se pone a ojo porque
+    // con z=2,5 el ancho visible es 335 px: los recorridos que cortaban en W dejaban
+    // de dibujar los obstáculos de la mitad derecha de la pantalla, que son justo los
+    // que el jugador necesita ver venir. Sale de Motor.encuadre y no de una cuenta
+    // acá para que Motor.avisoMs mida el MISMO campo visible que se dibuja: cuando
+    // cada uno tenía su modelo, el presupuesto de legibilidad era 91 ms optimista.
+    const enc=Motor.encuadre(z),vL=enc.izq,vR=enc.der,vT=enc.arriba,vB=enc.abajo;
+    // Los fondos sangran 8 px (escalados) fuera del encuadre: con el shake el
+    // transform corre todo hasta 7 px y antes quedaba una franja sin pintar.
+    const bl=8*z,fx0=vL-bl,fw=W*z+bl*2,fy0=vT-bl,fy1=vB+bl;
+    this.px(fx0,fy0,fw,GY-fy0,'#D9E8DC');
+    this.px(fx0,58,fw,34,'#C7DFCE');
+    this.px(fx0,92,fw,26,'#B7D4C2');
     this.fs('#F4EEDA');ctx.beginPath();ctx.arc(104,44,13,0,7);ctx.fill();
     const h1=-((cam*.14)%96);
     for(let i=-1;i<4;i++){const bx=h1+i*96;this.px(bx,164,96,GY-164,'#2E7D4F');
@@ -780,16 +869,14 @@ class Component extends DCLogic{
     const h2=-((cam*.36)%74);
     for(let i=-1;i<4;i++){const bx=h2+i*74;this.px(bx,192,74,GY-192,'#256B43');
       this.fs('#256B43');ctx.beginPath();ctx.ellipse(bx+37,194,42,11,0,Math.PI,0);ctx.fill();}
-    this.px(-8,GY,W+16,H-GY+8,'#1C5638');
-    for(const p of (g.pel||[])){const pxx=p.x-cam*0.62;if(pxx<-24)continue;if(pxx>W+24)break;
+    this.px(fx0,GY,fw,fy1-GY,'#1C5638');
+    for(const p of (g.pel||[])){const pxx=p.x-cam*0.62;if(pxx<vL-24)continue;if(pxx>vR+24)break;
       const fl=Math.sin(this.now()/260+p.ph);
       this.drawArt(FAUNA_ART.pelicano,pxx,p.y+fl*3,2);}
-    for(let i=0;i<10;i++)this.px(-8,GY+2+i*7,W+16,3,i%2?'#1A5034':'#1C5638');
+    for(let i=0,nf=(fy1-GY)/7;i<nf;i++)this.px(fx0,GY+2+i*7,fw,3,i%2?'#1A5034':'#1C5638');
     // Antes eran 60 y 141 iteraciones fijas de las que sólo ~4 y ~3 caían dentro
     // del canvas; ahora se recorre nada más el tramo visible.
-    for(let wx=-((cam*.9)%41);wx<W;wx+=41)this.px(wx,GY-3,2,3,'#2E7D4F');
-    for(const b of g.bunkers){const bx=b.x-cam;if(bx+b.w<0)continue;if(bx>W)break;
-      this.px(bx,GY-2,b.w,12,'#E7DFCA');this.px(bx+3,GY,b.w-6,4,'#D6C79A')}
+    for(let wx=Math.floor(fx0/41)*41-((cam*.9)%41);wx<vR;wx+=41)this.px(wx,GY-3,2,3,'#2E7D4F');
     for(const gwx of (g.greens||[])){const gx=gwx-cam;
     if(gx>-140&&gx<W+140){
       ctx.save();this.fs('#4E9E6B');ctx.beginPath();ctx.ellipse(gx,GY+3,150,16,0,0,7);ctx.fill();
@@ -811,13 +898,13 @@ class Component extends DCLogic{
       this.fs('#E8C34A');ctx.beginPath();ctx.moveTo(fx+4,GY-30);ctx.lineTo(fx+16,GY-26);ctx.lineTo(fx+4,GY-21);ctx.fill();
       if(g.ball){this.px(g.ball.x-cam,g.ball.y-2,3,3,'#F4EEDA')}
     }
-    for(const n of (g.nut||[])){const nx2=n.x-cam;if(nx2<-30)continue;if(nx2>W+30)break;
+    for(const n of (g.nut||[])){const nx2=n.x-cam;if(nx2<vL-30)continue;if(nx2>vR+30)break;
       const bob=Math.sin(this.now()/420+n.ph)>0?0:1;
       this.drawArt(FAUNA_ART.nutria,nx2,GY-8+bob,2);}
-    for(const z of (g.zor||[])){const zx2=z.x-cam;if(zx2<-36)continue;if(zx2>W+36)break;
-      const j=Math.abs(Math.sin(this.now()/560+z.ph));
+    for(const zo of (g.zor||[])){const zx2=zo.x-cam;if(zx2<vL-36)continue;if(zx2>vR+36)break;
+      const j=Math.abs(Math.sin(this.now()/560+zo.ph));
       this.drawArt(FAUNA_ART.zorro,zx2,GY-12-j*16,2);}
-    for(const o of g.obs){const ox=o.x-cam;if(ox+o.w<-34)continue;if(ox>W+34)break;
+    for(const o of g.obs){const ox=o.x-cam;if(ox+o.w<vL-34)continue;if(ox>vR+34)break;
       if(o.t==='tree'){this.px(ox+10,GY-18,6,18,'#3D2A18');
         this.fs(o.hit?'#6FAE87':'#14402A');ctx.beginPath();ctx.arc(ox+13,GY-32,15,0,7);ctx.fill();
         this.fs(o.hit?'#8FC7A3':'#1C5638');ctx.beginPath();ctx.arc(ox+8,GY-37,9,0,7);ctx.fill();}
@@ -828,7 +915,7 @@ class Component extends DCLogic{
       else{this.px(ox+4,GY-30,11,10,'#E8B48C');this.px(ox+2,GY-20,15,13,o.hit?'#BC4B3C':'#6FAE87');
         this.px(ox+4,GY-7,4,7,'#14402A');this.px(ox+10,GY-7,4,7,'#14402A');
         if(this._font!=='12px serif'){this._font='12px serif';ctx.font='12px serif';ctx.textAlign='center'}
-        this.fs('#14402A');ctx.fillText(o.who,ox+9,GY-33)}}
+        this.fs('#14402A');ctx.fillText(this.quien(o),ox+9,GY-33)}}
     const mx=TEE-16-cam,my=GY-MH,t=this.now()-g.t0;
     if(g.phase==='intro'){
       // putt: el palo va y viene como péndulo, golpea a los 950ms y sigue cortito
@@ -859,34 +946,47 @@ class Component extends DCLogic{
     }
     else if(g.rageT>0){const bob=Math.abs(Math.sin(g.rageT*.1))*6,up=bob>3;this.drawMig('p_08_festejo',mx,my-bob,true,up?-2:2,up?3:-2)}
     else{const br=Math.sin(this.now()/620)>0?0:1;this.drawMig('p_01_reposo',mx,my,false,0,-br)}
+    // Medidor de POTENCIA, que es lo único que el jugador elige del lanzamiento: la línea
+    // crece con la carga hacia el punto dorado, que marca el pico. Va en el ángulo fijo.
+    // (Acá iban además un arco punteado de 15° a 70° y una marca por cada uno de esos
+    // grados: eran la invitación a apuntar, y ya no hay ángulo que elegir.)
     if(g.phase==='charge'||g.phase==='ready'){
-      const a=g.angle*Math.PI/180,ox=TEE+2-cam,oy=GY-40,R=46;
-      ctx.save();ctx.lineWidth=1;
-      ctx.strokeStyle='rgba(244,238,218,.28)';ctx.setLineDash([2,3]);
-      ctx.beginPath();ctx.arc(ox+.5,oy+.5,R,-70*Math.PI/180,-15*Math.PI/180);ctx.stroke();
-      ctx.setLineDash([]);ctx.restore();
-      for(const dg of [15,30,45,60,70]){const t2=dg*Math.PI/180;
-        this.px(ox+Math.cos(t2)*(R-3),oy-Math.sin(t2)*(R-3),2,2,'rgba(244,238,218,.45)');}
+      const a=Motor.F.ANG_LANZ,ox=TEE+2-cam,oy=GY-40,R=46;
       const len=18+g.power*(R-18);
       for(let i=6;i<len;i+=4)this.px(ox+Math.cos(a)*i,oy-Math.sin(a)*i,2,2,'rgba(244,238,218,.9)');
       this.px(ox+Math.cos(a)*R,oy-Math.sin(a)*R,4,4,'#E8C34A');
     }
-    if(g.phase==='fly'){
-      for(let i=0;i<3;i++)this.px(W/2-6+i*6,44,4,4,i<g.air?'#E8C34A':'rgba(244,238,218,.22)');
-    }
-    for(const hp of (g.helpers||[])){hp.t++;const hx=hp.x-hp.cam0-(cam-hp.cam0)*0.18;if(hx<-30||hx>W+30)continue;
+    for(const hp of (g.helpers||[])){hp.t++;const hx=hp.x-hp.cam0-(cam-hp.cam0)*0.18;if(hx<vL-30||hx>vR+30)continue;
       const k=Math.min(1,hp.t/18),ease=1-(1-k)*(1-k);
       const fx2=hx+hp.dir*40*(1-ease),fy=hp.y+24*(1-ease)+Math.sin((this.now()+hp.x*7)/420)*2;
       ctx.save();ctx.globalAlpha=.5+.5*ease;this.drawArt(HELPER_ART[hp.k],fx2,fy,2);ctx.restore();this._fs=null;}
-    if(g.phase==='putt'||g.phase==='puttcharge'){
-      const c=g.club,ng=this.nearGreen(c.x),dir=ng-c.x>=0?1:-1;
-      const a=g.angle*Math.PI/180,ox=c.x-cam,oy=c.y-6,R=40;
-      const len=14+g.power*(R-14);
-      for(let i=6;i<len;i+=4)this.px(ox+dir*Math.cos(a)*i,oy-Math.sin(a)*i,2,2,'rgba(244,238,218,.9)');
-      this.px(ox+dir*Math.cos(a)*len,oy-Math.sin(a)*len,4,4,'#E8C34A');
-      this.px(ng-cam-1,GY-40,2,6,'#E8C34A');
+    // Arco predicho: convierte "adivinar" en "leer". Se ve a qué se le va a pegar,
+    // así la única destreza que queda es el timing.
+    if(g.phase==='fly'&&g.club&&!g.club.grounded){
+      const tr=Motor.trayectoria({x:g.club.x,y:g.club.y,vx:g.club.vx,vy:g.club.vy},600);
+      // Se corta en el borde del encuadre: 600 pasos son hasta 6.000 px de arco y
+      // sin el corte casi todos los fillRect caían fuera del canvas.
+      // Un punto cada 3 pasos y de z px de lado (o sea 2 px de dispositivo, el mismo
+      // tamaño en pantalla a cualquier zoom): con el punto de 1 px cada 6 pasos del
+      // diseño original el palo avanza ~8 px por paso y quedaban 4 puntos de 0,4 px
+      // en pantalla — medido, no estimado. Eso no se lee como un arco.
+      for(let i=3;i<tr.length;i+=3){const ax=tr[i].x-cam;if(ax>vR)break;
+        if(ax>=vL)this.px(ax,tr[i].y,z,z,'rgba(244,238,218,.35)');}
+      const o=g.objetivo;
+      if(o){
+        // marca del punto de impacto
+        this.px(o.x-cam,o.cima-2,o.w,2,'#E8C34A');
+        // anillo que se cierra: señal del toque
+        if(g.pasoObjetivo!=null){
+          const faltan=g.pasoObjetivo-(g.pasosVuelo||0);
+          const r=Math.max(2,Math.min(26,faltan*0.5));
+          ctx.save();ctx.strokeStyle='#E8C34A';ctx.lineWidth=1;
+          ctx.beginPath();ctx.arc(o.x-cam+o.w/2,o.cima,r,0,7);ctx.stroke();
+          ctx.restore();this._fs=null;
+        }
+      }
     }
-    if(g.club&&(g.phase==='fly'||g.phase==='done'||g.phase==='putt'||g.phase==='puttcharge')){
+    if(g.club&&(g.phase==='fly'||g.phase==='done')){
       const c=g.club;
       if(c.trail)c.trail.forEach((p,i)=>{ctx.save();ctx.globalAlpha=.07*(i+1);
         this.drawClub(p.x-cam,p.y,p.rot,true);ctx.restore();});
@@ -925,9 +1025,9 @@ class Component extends DCLogic{
       elegir:this.elegir,crear:this.crear,setNombre:this.setNombre,
       nuevoJugador:this.nuevoJugador,cambiarJugador:this.cambiarJugador,
       isTitle:s.screen==='title',isPlay:s.screen==='play',isRank:isRank,
-      cv:this.cv,rShot:this.rShot,rWind:this.rWind,rMetros:this.rMetros,rBest:this.rBest,
-      rGrito:this.rGrito,rFloat:this.rFloat,rHint:this.rHint,rMult:this.rMult,rTricks:this.rTricks,
-      onDown:this.onDown,onMove:this.onMove,onUp:this.onUp,
+      cv:this.cv,rMetros:this.rMetros,rBest:this.rBest,
+      rGrito:this.rGrito,rFloat:this.rFloat,rHint:this.rHint,rTricks:this.rTricks,
+      onDown:this.onDown,onUp:this.onUp,
       start:this.start,next:this.next,again:this.again,toTitle:this.toTitle,
       showRes:s.showRes,notRes:!s.showRes,resMeters:res.m,resTag:res.tag,resNote:res.note,resPts:res.pts,resKicker:res.kicker,nextLabel:res.label,
       totalPts:s.points+' puntos en la ronda',
@@ -939,11 +1039,11 @@ class Component extends DCLogic{
 /* === FIN DEL MOTOR ================================================ */
 
 const game = new Component();
-game.props = { tiros: 3, censura: 'Sin filtro', viento: true, sonido: true };
+game.props = { censura: 'Sin filtro', sonido: true };
 
 // los refs del motor apuntan directo a los nodos del shell
-const REFS = { cv:'cv', rShot:'rShot', rWind:'rWind', rMetros:'rMetros', rBest:'rBest',
-  rGrito:'rGrito', rFloat:'rFloat', rHint:'rHint', rMult:'rMult', rTricks:'rTricks' };
+const REFS = { cv:'cv', rMetros:'rMetros', rBest:'rBest',
+  rGrito:'rGrito', rFloat:'rFloat', rHint:'rHint', rTricks:'rTricks' };
 for (const k in REFS) game[k].current = $(REFS[k]);
 
 const scr = { title: $('scr-title'), play: $('scr-play'), rank: $('scr-rank'),
@@ -1017,7 +1117,7 @@ HOST = {
       $('resTag').textContent = v.resTag || '';
       $('resNote').textContent = v.resNote || '';
       $('resPts').textContent = v.resPts || '';
-      $('btnNext').textContent = v.nextLabel || 'Siguiente tiro';
+      $('btnNext').textContent = v.nextLabel || 'Ver ranking';
     }
     if (v.isRank){
       $('rankVerdict').textContent = v.rankVerdict;
@@ -1059,7 +1159,6 @@ $('btnAgain').addEventListener('click', () => game.again());
 $('btnTitle').addEventListener('click', () => game.toTitle());
 const zone = scr.play;
 zone.addEventListener('pointerdown', e => { zone.setPointerCapture(e.pointerId); game.onDown(e); });
-zone.addEventListener('pointermove', e => game.onMove(e));
 zone.addEventListener('pointerup',   e => game.onUp(e));
 zone.addEventListener('pointercancel', e => game.onUp(e));
 

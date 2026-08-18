@@ -23,6 +23,9 @@ function load() {                                  // simula abrir la app de cer
   global.AudioContext = undefined;
   global.window = { addEventListener(){}, removeEventListener(){} };
   global.React = { createRef: () => ({ current: el() }) };
+  // en el navegador lo declara motor.js como window.Motor; el motor embebido lo lee
+  // como global suelto, así que acá se inyecta el módulo real.
+  global.Motor = require('./motor.js');
   class DCLogic { constructor(){ this.props = {}; this.state = {}; }
     setState(u, cb){ Object.assign(this.state, typeof u === 'function' ? u(this.state) : u);
       if (cb) cb(); if (this.componentDidUpdate) this.componentDidUpdate({}); }
@@ -31,7 +34,7 @@ function load() {                                  // simula abrir la app de cer
   const C = new Function('DCLogic','React','window','document','performance',
     body + '\nreturn Component;')(DCLogic, React, window, document, performance);
   const c = new C();
-  c.props = { tiros: 3, censura: 'Sin filtro', viento: false, sonido: false };
+  c.props = { censura: 'Sin filtro', sonido: false };
   c.componentDidMount();
   return c;
 }
@@ -56,14 +59,13 @@ g.crear();
 ck('tras crear va al título', g.state.screen === 'title', g.state.screen);
 ck('quedó el jugador activo', g.state.player && g.state.player.name === 'Rodrigo', JSON.stringify(g.state.player));
 
-// ── jugar una ronda entera y cerrarla ─────────────────────────────────────
-function ronda(c, ptsPorTiro) {
+// ── jugar la ronda (un solo revoleo) y cerrarla ───────────────────────────
+// La ronda es UN vuelo: endShot cierra y next() va derecho al ranking.
+function ronda(c, metros) {
   c.start();
-  for (let s = 1; s <= 3; s++) {
-    c.g.club = { x: 26 + 3 * ptsPorTiro, y: 232, vx: 0, vy: 0, rot: 0, spin: 0, grounded: true, trail: [] };
-    c.g.perfect = false; c.endShot('ok');
-    VT += 1000; c.next();
-  }
+  c.g.club = { x: 26 + 3 * metros, y: 232, vx: 0, vy: 0, rot: 0, spin: 0, grounded: true, trail: [] };
+  c.g.perfect = false; c.endShot();
+  VT += 1000; c.next();
   return c.state.points;
 }
 const total1 = ronda(g, 400);
@@ -95,8 +97,8 @@ g.crear();
 const total2 = ronda(g, 1000);
 const r2 = g.renderVals().ranking;
 const iG = r2.findIndex(x => x.name === 'Gonza'), iR = r2.findIndex(x => x.name === 'Rodrigo');
-// el invariante es el orden por puntaje, no quién tiró más lejos: los greens
-// están cada 200 m y clavarla multiplica ×5, así que 400 m puede ganarle a 900
+// el invariante es el orden por puntaje, no quién tiró más lejos: el puntaje sale de
+// la cadena de rebotes, no de la distancia
 ck('el ranking ordena por puntaje', (total2 > total1) === (iG < iR),
   'gonza=' + total2 + '@' + iG + ' rodrigo=' + total1 + '@' + iR);
 ck('el ranking está ordenado de mayor a menor',
@@ -106,13 +108,12 @@ ck('los dos jugadores están en el ranking',
 
 // ── histórico ─────────────────────────────────────────────────────────────
 g = load();
-const raw = JSON.parse(store['sdga-palo-v4']);
+const raw = JSON.parse(store['sdga-palo-v5']);
 ck('la base guarda 2 jugadores', raw.players.length === 2, raw.players.length);
 ck('la base guarda 2 rondas', raw.scores.length === 2, raw.scores.length);
 ck('cada ronda tiene jugador, puntos, metros y fecha',
   raw.scores.every(s => s.p && typeof s.pts === 'number' && typeof s.m === 'number' && s.at > 0),
   JSON.stringify(raw.scores[0]));
-const hist = g.renderVals ? null : null;
 const C2 = raw.players.find(p => p.name === 'Rodrigo');
 ck('el mejor puntaje quedó en el jugador', C2.best === total1, C2.best + ' vs ' + total1);
 
@@ -123,17 +124,34 @@ g.setNombre({ target: { value: 'Un nombre larguísimo que no entra' } });
 g.crear();
 ck('el nombre se recorta a 14', g.state.player.name.length <= 14, g.state.player.name);
 // la base rota a 500 filas
-const d = JSON.parse(store['sdga-palo-v4']);
+const d = JSON.parse(store['sdga-palo-v5']);
 d.scores = Array.from({ length: 600 }, (_, i) => ({ p: 'x', pts: i, m: i, at: i }));
-store['sdga-palo-v4'] = JSON.stringify(d);
-g = load(); g.state.player = JSON.parse(store['sdga-palo-v4']).players[0];
-g.state.points = 123; g.state.best = 45; g.state.res = { last: true }; g.next();
-ck('el log se poda a 500', JSON.parse(store['sdga-palo-v4']).scores.length === 500,
-  JSON.parse(store['sdga-palo-v4']).scores.length);
+store['sdga-palo-v5'] = JSON.stringify(d);
+g = load(); g.state.player = JSON.parse(store['sdga-palo-v5']).players[0];
+g.state.points = 123; g.state.best = 45; g.next();
+ck('el log se poda a 500', JSON.parse(store['sdga-palo-v5']).scores.length === 500,
+  JSON.parse(store['sdga-palo-v5']).scores.length);
 // base corrupta no rompe el arranque
-store['sdga-palo-v4'] = '{no es json';
+store['sdga-palo-v5'] = '{no es json';
 g = load();
 ck('base corrupta arranca en alta', g.state.screen === 'nuevo', g.state.screen);
+
+// migración: los jugadores viejos se conservan, los puntajes arrancan limpios
+store['sdga-palo-v4'] = JSON.stringify({
+  players: [{ id:'viejo', name:'Lechu', emoji:'🥃', best:8245, rondas:12, visto:1 }],
+  scores: [{ p:'viejo', pts:8245, m:600, at:1 }],
+});
+delete store['sdga-palo-v5'];
+g = load();
+const v5 = JSON.parse(store['sdga-palo-v5'] || '{"players":[],"scores":[]}');
+ck('migra el jugador viejo', v5.players.some(p => p.name === 'Lechu'), JSON.stringify(v5.players));
+ck('le resetea el best', v5.players.every(p => p.best === 0), JSON.stringify(v5.players));
+// El spec migra nombre Y emoji: sin esto, una migración que se olvidara del emoji pasaba.
+ck('le conserva el emoji', v5.players.every(p => p.emoji === '🥃'), JSON.stringify(v5.players));
+ck('no arrastra puntajes de la escala vieja', v5.scores.length === 0, v5.scores.length);
+// Migrado ⇒ hay jugadores ⇒ arranca en el selector y no en el alta. Sin esto,
+// "migra" podría pasar con una base que el juego no llega a leer.
+ck('con la base migrada arranca en el selector', g.state.screen === 'quien', g.state.screen);
 
 console.log(fail.length ? 'FALLAS:\n- ' + fail.join('\n- ') : 'TODO OK — ' +
   'alta, persistencia entre sesiones, selección, ranking desde la base, histórico y bordes');

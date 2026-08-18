@@ -1,7 +1,8 @@
 # Revoleá el palo — SDGA
 
-Miguelón perdió el hoyo. Ahora vuela el palo. Juego arcade, tres tiros, combos y
-ranking histórico por jugador.
+Miguelón perdió el hoyo. Ahora vuela el palo. Juego arcade de un solo revoleo: el
+palo se mantiene en el aire rebotando, se toca una vez por rebote y el timing
+decide todo. Combo de rebotes y ranking histórico por jugador.
 
 Jugar: https://rodrigomateus-debug.github.io/revolea-el-palo/
 
@@ -20,6 +21,8 @@ Después de tocar el juego:
 node build-app.js .
 node test-motor.js "Revolea el Palo.dc.html"
 node test-db.js "Revolea el Palo.dc.html"
+node test-generador.js
+node test-destreza.js
 ```
 
 ## Ramas
