@@ -35,6 +35,7 @@ const HTML = `<!DOCTYPE html>
 <link rel="preload" as="image" href="./miguelon/palo.svg">
 <link rel="preload" as="image" href="./miguelon/p_01_reposo.svg">
 <link rel="preload" as="image" href="./miguelon/p_09_carga.svg">
+<script src="motor.js"></script>
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Anton&family=Archivo:wght@400;600;700&display=swap">
 <style>
 :root{--font-display:Anton,Impact,sans-serif;--font-body:Archivo,system-ui,sans-serif;--s:1}
@@ -128,7 +129,7 @@ ${KEYFRAMES}
     </div>
     </div>
     <div style="font-family:var(--font-display);font-size:46px;line-height:.9;color:#E8C34A;text-transform:uppercase;text-align:center;margin-top:6px">Miguelón</div>
-    <div style="font:400 12px/1.5 var(--font-body);color:rgba(244,238,218,.78);text-align:center;max-width:264px;margin-top:6px">Camisa hawaiana, paciencia cero. Tres tiros: encadená trucos y clavala en el green.</div>
+    <div style="font:400 12px/1.5 var(--font-body);color:rgba(244,238,218,.78);text-align:center;max-width:264px;margin-top:6px">Camisa hawaiana, paciencia cero. Un solo revoleo: tocá a tiempo en cada rebote y el palo no baja más.</div>
     <div id="recordLine" class="hide" style="background:#E8C34A;color:#14402A;font-family:var(--font-display);font-size:13px;letter-spacing:.08em;padding:3px 11px;text-transform:uppercase;margin-top:10px"></div>
     <button id="btnQuien" style="display:flex;align-items:center;gap:8px;background:rgba(12,43,28,.5);border:1px solid rgba(244,238,218,.25);border-radius:999px;padding:7px 14px;margin-top:8px;cursor:pointer;color:#F4EEDA;font-family:var(--font-display);font-size:13px;line-height:1;text-transform:uppercase">
       <span id="quienSoy"></span>
@@ -140,20 +141,9 @@ ${KEYFRAMES}
   <!-- ── juego ──────────────────────────────────────────────── -->
   <div class="screen hide" id="scr-play" style="touch-action:none">
     <canvas id="cv" aria-hidden="true" style="position:absolute;inset:0;width:100%;height:100%;display:block;image-rendering:pixelated;touch-action:none"></canvas>
-    <div style="position:absolute;top:calc(24px + env(safe-area-inset-top));left:14px;right:14px;display:flex;justify-content:space-between;align-items:flex-start;pointer-events:none">
-      <div style="background:rgba(12,43,28,.72);border-radius:12px;padding:7px 11px;display:flex;flex-direction:column;gap:3px">
-        <div style="font:600 8px/1 var(--font-body);letter-spacing:.18em;color:#6FAE87;text-transform:uppercase">Tiro</div>
-        <div id="rShot" style="font-family:var(--font-display);font-size:19px;line-height:1;color:#F4EEDA">1/3</div>
-      </div>
-      <div style="background:rgba(12,43,28,.72);border-radius:12px;padding:7px 11px;display:flex;flex-direction:column;gap:3px;align-items:flex-end">
-        <div style="font:600 8px/1 var(--font-body);letter-spacing:.18em;color:#6FAE87;text-transform:uppercase">Viento</div>
-        <div id="rWind" style="font-family:var(--font-display);font-size:19px;line-height:1;color:#E8C34A">→ 0</div>
-      </div>
-    </div>
     <div style="position:absolute;top:170px;right:12px;display:flex;flex-direction:column;align-items:flex-end;gap:6px;pointer-events:none">
       <div id="rMetros" style="font-family:var(--font-display);font-size:44px;line-height:1.05;color:#F4EEDA;background:rgba(12,43,28,.82);border-radius:14px;padding:6px 14px 8px;opacity:0">0 M</div>
       <div id="rBest" style="font:600 9px/1 var(--font-body);letter-spacing:.16em;color:rgba(244,238,218,.85);text-transform:uppercase;background:rgba(12,43,28,.82);border-radius:9px;padding:5px 9px">Total 0 pts</div>
-      <div id="rMult" style="font-family:var(--font-display);font-size:20px;line-height:1;color:#E8C34A;background:rgba(12,43,28,.86);border-radius:11px;padding:5px 11px;opacity:0">+0 ×1.0</div>
       <div id="rTricks" style="font:600 8px/1.4 var(--font-body);letter-spacing:.12em;color:#F4EEDA;text-transform:uppercase;background:rgba(12,43,28,.86);border-radius:9px;padding:5px 9px;max-width:150px;text-align:right;opacity:0"></div>
     </div>
     <div id="rGrito" style="position:absolute;left:22px;top:404px;max-width:196px;background:#F4EEDA;color:#0C2B1C;font-family:var(--font-display);font-size:19px;line-height:1.08;padding:10px 14px 11px;border-radius:16px 16px 16px 4px;box-shadow:0 4px 0 rgba(12,43,28,.35);opacity:0;pointer-events:none;transform-origin:8% 100%"></div>
@@ -172,7 +162,7 @@ ${KEYFRAMES}
         </div>
       </div>
       <div style="position:absolute;left:0;right:0;bottom:calc(24px + env(safe-area-inset-bottom));display:flex;justify-content:center;animation:sheetUp .28s cubic-bezier(.2,.9,.3,1.2) both">
-        <button class="btn" id="btnNext">Siguiente tiro</button>
+        <button class="btn" id="btnNext">Ver ranking</button>
       </div>
     </div>
   </div>
@@ -218,11 +208,11 @@ ${ENGINE}
 /* === FIN DEL MOTOR ================================================ */
 
 const game = new Component();
-game.props = { tiros: 3, censura: 'Sin filtro', viento: true, sonido: true };
+game.props = { censura: 'Sin filtro', sonido: true };
 
 // los refs del motor apuntan directo a los nodos del shell
-const REFS = { cv:'cv', rShot:'rShot', rWind:'rWind', rMetros:'rMetros', rBest:'rBest',
-  rGrito:'rGrito', rFloat:'rFloat', rHint:'rHint', rMult:'rMult', rTricks:'rTricks' };
+const REFS = { cv:'cv', rMetros:'rMetros', rBest:'rBest',
+  rGrito:'rGrito', rFloat:'rFloat', rHint:'rHint', rTricks:'rTricks' };
 for (const k in REFS) game[k].current = $(REFS[k]);
 
 const scr = { title: $('scr-title'), play: $('scr-play'), rank: $('scr-rank'),
@@ -296,7 +286,7 @@ HOST = {
       $('resTag').textContent = v.resTag || '';
       $('resNote').textContent = v.resNote || '';
       $('resPts').textContent = v.resPts || '';
-      $('btnNext').textContent = v.nextLabel || 'Siguiente tiro';
+      $('btnNext').textContent = v.nextLabel || 'Ver ranking';
     }
     if (v.isRank){
       $('rankVerdict').textContent = v.rankVerdict;
@@ -338,7 +328,6 @@ $('btnAgain').addEventListener('click', () => game.again());
 $('btnTitle').addEventListener('click', () => game.toTitle());
 const zone = scr.play;
 zone.addEventListener('pointerdown', e => { zone.setPointerCapture(e.pointerId); game.onDown(e); });
-zone.addEventListener('pointermove', e => game.onMove(e));
 zone.addEventListener('pointerup',   e => game.onUp(e));
 zone.addEventListener('pointercancel', e => game.onUp(e));
 
