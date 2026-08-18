@@ -32,17 +32,19 @@
   // Velocidad de salida del lanzamiento. Vive acá y no en el componente porque el
   // presupuesto de legibilidad se mide con ella y escrita en dos lados se desincroniza.
   const vLanzamiento = (potencia, perfecto) => 5.4 + potencia * (perfecto ? 1.12 : 1) * 8.6;
-  // vx del lanzamiento a potencia plena y con el ángulo por defecto (45°): 10,63. Es la
-  // ÚNICA velocidad del juego que supera VX_MAX, y es el peor encuadre: `adelante`
-  // evaluado en el clamp promete 182,4 px de arco por delante y en ese instante hay
-  // 178,6. Los 3,8 px de diferencia son la razón por la que el peor aviso medido en
-  // vuelos reales (788 ms) cae abajo del piso de 800 y la cadena sintética, que arranca
-  // de un rebote y nunca pasa de 6,95, no lo veía.
-  // OJO CON EL ÁNGULO: el jugador puede arrastrar hasta 15°, y ahí vx sale 14,52. No
-  // entra en este número a propósito — `paso` clampea antes de mover el palo, así que
-  // ni la posición ni la cámara ven nunca más de VX_MAX y el atraso real está acotado
-  // por el clamp igual. Lo que este número cubre es el estado con el que se MIDE.
-  F.VX_LANZ = Math.cos(Math.PI / 4) * vLanzamiento(1, true);
+  // El ángulo de lanzamiento: 45°, FIJO. Antes se podía arrastrar entre 15° y 70°, y a
+  // 15° la vx de salida daba 14,52: medido, el presupuesto de legibilidad se caía a
+  // 727 ms con 1.852 de 4.000 objetivos por debajo del piso. O sea que había un camino
+  // jugable en el que el juego era ilegible casi la mitad del tiempo, y encima apuntar
+  // dejó de ser una decisión cuando la destreza se mudó a los toques. Se fue el control.
+  F.ANG_LANZ = Math.PI / 4;
+  // vx del lanzamiento a potencia plena. Con el ángulo fijo, ésta es la ÚNICA velocidad
+  // de salida que el juego produce, y la única del juego entera que supera VX_MAX.
+  // Es también el peor encuadre: `adelante` evaluado en el clamp promete 182,4 px de arco
+  // por delante y en ese instante hay 178,6. Los 3,8 px de diferencia son la razón por la
+  // que el peor aviso medido en vuelos reales (788 ms) cae abajo del piso de 800 y la
+  // cadena sintética, que arranca de un rebote y nunca pasa de 6,95, no lo veía.
+  F.VX_LANZ = Math.cos(F.ANG_LANZ) * vLanzamiento(1, true);
 
   // El campo visible, en unidades lógicas, para un zoom dado. UNA sola derivación,
   // que usan tanto el que dibuja como el que mide: draw() pinta con

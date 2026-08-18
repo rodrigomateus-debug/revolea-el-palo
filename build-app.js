@@ -328,7 +328,6 @@ $('btnAgain').addEventListener('click', () => game.again());
 $('btnTitle').addEventListener('click', () => game.toTitle());
 const zone = scr.play;
 zone.addEventListener('pointerdown', e => { zone.setPointerCapture(e.pointerId); game.onDown(e); });
-zone.addEventListener('pointermove', e => game.onMove(e));
 zone.addEventListener('pointerup',   e => game.onUp(e));
 zone.addEventListener('pointercancel', e => game.onUp(e));
 

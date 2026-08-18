@@ -164,7 +164,9 @@ function vuelo(errorMs, semilla, tope) {
   for (let i = 0; i < 8000 && c.g.phase !== 'ready'; i++) { adv(M.F.STEP); c.tick(now()); }
   c.begin();
   for (let i = 0; i < 30; i++) { adv(M.F.STEP); c.tick(now()); }
-  c.g.manual = true; c.g.angle = 45; c.g.power = 1;
+  // Lo único que se le fija al lanzamiento es la potencia: el ángulo ya no se puede
+  // tocar, sale fijo de M.F.ANG_LANZ (45°, el mismo que este arnés clavaba a mano).
+  c.g.power = 1;
   // ANTES de fire(): fire -> launch -> buscarObjetivo -> rellenar ya corre con el palo
   // en y=188 y vy < 0, o sea dentro del contrato y dentro de la banda que se cuenta. Con
   // el corte después, un hueco del lanzamiento entraba al contador global y a los huecos

@@ -199,6 +199,14 @@ Diseño y código menos:
 - El ÷2 del bunker.
 - La fase de putt completa (`startPutt`, `firePutt`, fases `putt`/`puttcharge`).
 - La estructura de 3 tiros: un vuelo por partida.
+- **El ángulo de lanzamiento como decisión.** Queda fijo en 45° (`F.ANG_LANZ`), de
+  donde sale `F.VX_LANZ = 10,63`, la única velocidad de salida que el juego produce.
+  Se fue el barrido automático y también el arrastre: a 15° la `vx` de salida daba
+  14,52 y el presupuesto de legibilidad se caía a **727 ms con 1.852 de 4.000
+  objetivos por debajo del piso** — un camino jugable en el que el juego era
+  ilegible casi la mitad del tiempo. Con él se fueron `g.angle`, `g.manual`,
+  `onMove`, las flechas ↑↓, y el arco punteado con marcas de grados que invitaba a
+  apuntar (queda el medidor de potencia, que es lo único que el jugador elige).
 - El truco ASTRONAUTA y el techo de `y<50` como evento puntuado.
 
 ### Ritmo del reintento

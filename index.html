@@ -290,7 +290,7 @@ class Component extends DCLogic{
   componentDidMount(){
     this.imgs={};this.red={};
     POSES.forEach(n=>{const i=new Image();i.decoding='async';i.src='miguelon/'+n+'.svg';this.imgs[n]=i});
-    this.g={phase:'ready',t0:0,power:0,angle:45,manual:false,club:null,obs:[],cam:0,rageT:0,fx:[],dust:[],helpers:[],ball:null};
+    this.g={phase:'ready',t0:0,power:0,club:null,obs:[],cam:0,rageT:0,fx:[],dust:[],helpers:[],ball:null};
     this.mkClubSprite();
     // Un tick = 0..MAXSTEPS pasos de lógica de 16.67 ms + un solo dibujo. Antes
     // era un step() por frame de rAF, así que el juego iba al doble de velocidad
@@ -319,16 +319,14 @@ class Component extends DCLogic{
       else{try{this._ac&&this._ac.resume()}catch(e){}}};
     document.addEventListener('visibilitychange',this.onVis);
     // Sólo mientras se juega: si no, el preventDefault del espacio impide escribir
-    // el nombre en el alta de jugador y las flechas mueven el ángulo desde los menús.
+    // el nombre en el alta de jugador.
     this.jugando=()=>this.state.screen==='play';
+    // Mismo reparto que onDown: en el aire el espacio es el TOQUE, que es la única
+    // mecánica del juego. Sin esto el teclado podía lanzar y después no hacer nada.
     this.kd=e=>{if(!this.jugando())return;
-      // Mismo reparto que onDown: en el aire el espacio es el TOQUE, que es la única
-      // mecánica del juego. Sin esto el teclado podía lanzar y después no hacer nada.
       if(e.code==='Space'&&!e.repeat){e.preventDefault();
         if(this.g&&this.g.phase==='fly'&&this.g.club&&!this.g.club.grounded){this.tocar();return}
-        this.begin()}
-      if(e.code==='ArrowUp'){this.g.manual=true;this.g.angle=clamp(this.g.angle+4,15,70)}
-      if(e.code==='ArrowDown'){this.g.manual=true;this.g.angle=clamp(this.g.angle-4,15,70)}};
+        this.begin()}};
     this.ku=e=>{if(!this.jugando())return;if(e.code==='Space'){e.preventDefault();this.fire()}};
     window.addEventListener('keydown',this.kd);window.addEventListener('keyup',this.ku);
     this.firstTap=()=>{window.removeEventListener('pointerdown',this.firstTap);
@@ -459,7 +457,7 @@ class Component extends DCLogic{
   stopMusic(){if(this._introAudio){try{this._introAudio.pause();}catch(e){}}if(this._titleAudio){try{this._titleAudio.pause();}catch(e){}}}
 
   newShot(intro){
-    const g=this.g;g.power=0;g.angle=45;g.manual=false;g.club=null;g.cam=0;g.rageT=0;g.fx=[];g.dust=[];g.helpers=[];
+    const g=this.g;g.power=0;g.club=null;g.cam=0;g.rageT=0;g.fx=[];g.dust=[];g.helpers=[];
     g.greenX=TEE+200*PXM;
     g.greens=[];for(let gm=200;gm<=1200;gm+=200)g.greens.push(TEE+gm*PXM);
     g.rand=Motor.lcg((Math.random()*0x7fffffff)|0);
@@ -496,7 +494,7 @@ class Component extends DCLogic{
   prune(a){let w=0;for(let i=0;i<a.length;i++){const f=a[i];if(--f.t>0)a[w++]=f}a.length=w}
 
   begin(){const g=this.g;if(!g||g.phase!=='ready'||this.state.screen!=='play')return;
-    g.phase='charge';g.t0=this.now();g.manual=false;this.sfxCharge();this.heliOn();
+    g.phase='charge';g.t0=this.now();this.sfxCharge();this.heliOn();
     this.txt(this.rHint,'Soltá en el pico de potencia');}
   fire(){
     const g=this.g;if(!g||g.phase!=='charge')return;this.heliOff();
@@ -523,10 +521,11 @@ class Component extends DCLogic{
     this.txt(this.rTricks,cb.map(i=>i.name+(i.n>1?' ×'+i.n:'')).join('  ·  '));}
 
   launch(){
-    // La velocidad sale de Motor.vLanzamiento y no de una cuenta acá: el presupuesto
-    // de legibilidad se mide con ella (es la única vx del juego que supera VX_MAX), y
-    // escrita en los dos lados el modelo y el juego se separan sin que nada avise.
-    const g=this.g,a=g.angle*Math.PI/180,v=Motor.vLanzamiento(g.locked,g.perfect);
+    // El ángulo y la velocidad salen de Motor y no de cuentas acá: el presupuesto de
+    // legibilidad se mide con esa combinación (es la única vx del juego que supera
+    // VX_MAX), y escritos en los dos lados el modelo y el juego se separan en silencio.
+    // Lo único que el jugador decide del lanzamiento es la potencia.
+    const g=this.g,a=Motor.F.ANG_LANZ,v=Motor.vLanzamiento(g.locked,g.perfect);
     g.club={x:TEE+8,y:GY-44,vx:Math.cos(a)*v,vy:-Math.sin(a)*v,rot:-a,
       spin:Math.max(.22,.19+g.locked*.24),grounded:false,trail:[]};
     g.phase='fly';g.flyT=0;g.pasosVuelo=0;g.rageT=240;
@@ -647,12 +646,11 @@ class Component extends DCLogic{
   again=()=>{this.sfxButton();this.stopMusic();this.heliOff();this.setState({screen:'play',best:0,points:0,showRes:false},()=>this.newShot(true))}
   toTitle=()=>{this.setState({screen:'title'});this.startMusic();}
 
-  onDown=e=>{const g=this.g;
+  // Un solo gesto en todo el juego: apretar y soltar para lanzar, tocar para rebotar.
+  // No hay onMove porque no hay nada que arrastrar.
+  onDown=()=>{const g=this.g;
     if(g&&g.phase==='fly'&&g.club&&!g.club.grounded){this.tocar();return}
-    this.y0=e.clientY;this.begin()}
-  onMove=e=>{const g=this.g;if(!g||g.phase!=='charge'||this.y0==null)return;
-    const d=this.y0-e.clientY;if(Math.abs(d)>6)g.manual=true;
-    if(g.manual)g.angle=clamp(45+d*.3,15,70)}
+    this.begin()}
   onUp=()=>{this.fire()}
 
   hit(o,c){const bx=o.x,by=GY-o.h;return c.x>bx-4&&c.x<bx+o.w+4&&c.y>by&&c.y<GY+3}
@@ -674,9 +672,10 @@ class Component extends DCLogic{
       if(g.missT&&this.now()-g.missT>1600){g.missT=0;g.ball=null;g.phase='ready';this.setHint()}
     }
     if(g.phase==='charge'){
-      // El ángulo NO barre solo: arranca en 45° y sólo se mueve si el jugador arrastra.
-      // El barrido sumaba una segunda lotería de timing arriba de la de potencia, y la
-      // destreza que este juego mide es la del toque en el aire.
+      // Sólo carga potencia. El ángulo ya no existe como decisión: barría solo (una
+      // segunda lotería de timing arriba de la de potencia) y además se podía arrastrar
+      // entre 15° y 70°, que a 15° dejaba el juego ilegible. La destreza que este juego
+      // mide es la del toque en el aire.
       const cyc=t%2600;
       g.power=cyc<1600?cyc/1600:1-((cyc-1600)/1000)*.72;
     }
@@ -949,14 +948,12 @@ class Component extends DCLogic{
     }
     else if(g.rageT>0){const bob=Math.abs(Math.sin(g.rageT*.1))*6,up=bob>3;this.drawMig('p_08_festejo',mx,my-bob,true,up?-2:2,up?3:-2)}
     else{const br=Math.sin(this.now()/620)>0?0:1;this.drawMig('p_01_reposo',mx,my,false,0,-br)}
+    // Medidor de POTENCIA, que es lo único que el jugador elige del lanzamiento: la línea
+    // crece con la carga hacia el punto dorado, que marca el pico. Va en el ángulo fijo.
+    // (Acá iban además un arco punteado de 15° a 70° y una marca por cada uno de esos
+    // grados: eran la invitación a apuntar, y ya no hay ángulo que elegir.)
     if(g.phase==='charge'||g.phase==='ready'){
-      const a=g.angle*Math.PI/180,ox=TEE+2-cam,oy=GY-40,R=46;
-      ctx.save();ctx.lineWidth=1;
-      ctx.strokeStyle='rgba(244,238,218,.28)';ctx.setLineDash([2,3]);
-      ctx.beginPath();ctx.arc(ox+.5,oy+.5,R,-70*Math.PI/180,-15*Math.PI/180);ctx.stroke();
-      ctx.setLineDash([]);ctx.restore();
-      for(const dg of [15,30,45,60,70]){const t2=dg*Math.PI/180;
-        this.px(ox+Math.cos(t2)*(R-3),oy-Math.sin(t2)*(R-3),2,2,'rgba(244,238,218,.45)');}
+      const a=Motor.F.ANG_LANZ,ox=TEE+2-cam,oy=GY-40,R=46;
       const len=18+g.power*(R-18);
       for(let i=6;i<len;i+=4)this.px(ox+Math.cos(a)*i,oy-Math.sin(a)*i,2,2,'rgba(244,238,218,.9)');
       this.px(ox+Math.cos(a)*R,oy-Math.sin(a)*R,4,4,'#E8C34A');
@@ -1032,7 +1029,7 @@ class Component extends DCLogic{
       isTitle:s.screen==='title',isPlay:s.screen==='play',isRank:isRank,
       cv:this.cv,rMetros:this.rMetros,rBest:this.rBest,
       rGrito:this.rGrito,rFloat:this.rFloat,rHint:this.rHint,rTricks:this.rTricks,
-      onDown:this.onDown,onMove:this.onMove,onUp:this.onUp,
+      onDown:this.onDown,onUp:this.onUp,
       start:this.start,next:this.next,again:this.again,toTitle:this.toTitle,
       showRes:s.showRes,notRes:!s.showRes,resMeters:res.m,resTag:res.tag,resNote:res.note,resPts:res.pts,resKicker:res.kicker,nextLabel:res.label,
       totalPts:s.points+' puntos en la ronda',
@@ -1164,7 +1161,6 @@ $('btnAgain').addEventListener('click', () => game.again());
 $('btnTitle').addEventListener('click', () => game.toTitle());
 const zone = scr.play;
 zone.addEventListener('pointerdown', e => { zone.setPointerCapture(e.pointerId); game.onDown(e); });
-zone.addEventListener('pointermove', e => game.onMove(e));
 zone.addEventListener('pointerup',   e => game.onUp(e));
 zone.addEventListener('pointercancel', e => game.onUp(e));
 
