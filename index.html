@@ -28,7 +28,15 @@ body{font-family:var(--font-body);color:#F4EEDA;overflow:hidden;
   user-select:none;-webkit-user-select:none}
 /* El escenario mantiene el diseño original de 372x808 y se escala a la pantalla:
    así todas las coordenadas absolutas del HUD siguen valiendo, sin distorsión. */
-#wrap{position:fixed;inset:0;display:grid;place-items:center}
+/* Los insets van acá y no en el cálculo de la escala: como webapp en iOS la altura
+   de layout incluye la franja de la barra de inicio, así que el escenario se
+   escalaba más alto que lo visible y el borde de abajo quedaba cortado. Medirlo con
+   visualViewport arreglaría eso pero el teclado también lo encoge, y la pantalla de
+   nombre tiene un input: al escribir el juego se achicaría. Los safe-area insets no
+   los mueve el teclado. */
+#wrap{position:fixed;top:env(safe-area-inset-top);right:env(safe-area-inset-right);
+  bottom:env(safe-area-inset-bottom);left:env(safe-area-inset-left);
+  display:grid;place-items:center}
 #stage{position:relative;width:372px;height:808px;overflow:hidden;background:#1C5638;
   transform:scale(var(--s));transform-origin:center;contain:layout paint}
 .screen{position:absolute;inset:0}
@@ -970,8 +978,13 @@ class Component extends DCLogic{
       // tamaño en pantalla a cualquier zoom): con el punto de 1 px cada 6 pasos del
       // diseño original el palo avanza ~8 px por paso y quedaban 4 puntos de 0,4 px
       // en pantalla — medido, no estimado. Eso no se lee como un arco.
+      // Contraste: el punto crema al 35% no se lee contra el cielo claro — verificado a
+      // ojo en el teléfono, que es la única forma de verlo. Va un reborde oscuro detrás
+      // y el núcleo crema casi opaco, así el arco se lee sobre cielo y sobre pasto sin
+      // depender de contra qué caiga.
       for(let i=3;i<tr.length;i+=3){const ax=tr[i].x-cam;if(ax>vR)break;
-        if(ax>=vL)this.px(ax,tr[i].y,z,z,'rgba(244,238,218,.35)');}
+        if(ax>=vL){this.px(ax-1,tr[i].y-1,z+2,z+2,'rgba(27,31,40,.5)');
+                   this.px(ax,tr[i].y,z,z,'rgba(244,238,218,.92)');}}
       const o=g.objetivo;
       if(o){
         // marca del punto de impacto
@@ -1167,19 +1180,5 @@ const stage = $('stage');
 const fit = () => {
   const r = document.getElementById('wrap').getBoundingClientRect();
   const w = r.width || innerWidth, h = r.height || innerHeight;
-  document.documentElement.style.setProperty('--s', Math.min(w / 372, h / 808));
-};
-// ResizeObserver y no sólo el evento resize: el evento no dispara en todos los
-// contextos (documentos embebidos/ocultos) y el escenario quedaba mal escalado.
-if (window.ResizeObserver) new ResizeObserver(fit).observe(document.getElementById('wrap'));
-addEventListener('resize', fit, { passive: true });
-addEventListener('orientationchange', () => setTimeout(fit, 50));
-if (window.visualViewport) visualViewport.addEventListener('resize', fit, { passive: true });
-fit();
-
-HOST.paint();
-game.componentDidMount();
-HOST.paint();
-</script>
-</body>
-</html>
+  const s = Math.min(w / 372, h / 808);
+  // Nunca escribir una escala no positiva. El 

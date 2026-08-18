@@ -327,7 +327,11 @@ ck('hueco de 5 s no dispara catch-up', burst <= 4, burst + ' pasos');
 // frames (la captura se cuelga), así que se verifica sobre las llamadas al contexto:
 // se graba cada draw() y se afirma lo que un humano miraría. Lo que NO cubre esto:
 // si el pixel art se lee bien al zoom de 2,5x. Eso es juicio humano y queda abierto.
-const ARCO = 'rgba(244,238,218,.35)', ORO = '#E8C34A';
+// El núcleo crema del punto del arco y su reborde oscuro. Van los dos porque el
+// reborde ES el arreglo de contraste: el crema al .35 de antes no se leía contra el
+// cielo claro (verificado a ojo, no hay forma de medirlo acá). Si alguien saca el
+// reborde el arco vuelve a desaparecer sobre fondo claro, así que se asevera aparte.
+const ARCO = 'rgba(244,238,218,.92)', ARCO_BORDE = 'rgba(27,31,40,.5)', ORO = '#E8C34A';
 const PROPS = { censura: 'Sin filtro', sonido: false };
 function reposo() {
   const d = new Component();
@@ -400,6 +404,14 @@ ck('en vuelo el fondo tapa las 4 esquinas', esquinasSinPintar(fVue) === 0,
   esquinasSinPintar(fVue) + ' esquinas sin pintar');
 const pv = puntos(fVue);
 ck('el arco predicho se dibuja', pv.length > 5, pv.length + ' puntos');
+// Cada núcleo tiene que tener su reborde, y el reborde tiene que ser MÁS GRANDE que el
+// núcleo: si son del mismo lado no sobresale y no aporta contraste. Se compara contra
+// la cantidad de núcleos y no contra un número fijo para que no pase con uno solo.
+const bordes = fVue.filter(x => x.op === 'fillRect' && x.fill === ARCO_BORDE);
+ck('cada punto del arco lleva reborde oscuro para leerse sobre el cielo claro',
+  bordes.length === pv.length && bordes.every(b => b.a[2] > pv[0].a[2]),
+  bordes.length + ' rebordes para ' + pv.length + ' núcleos' +
+  (bordes.length ? ', lado ' + bordes[0].a[2] + ' vs ' + pv[0].a[2] : ''));
 // Sin recorte el arco son ~100 puntos de hasta 6.000 px: casi todos afuera del
 // canvas. Se tolera 1 px por el Math.round de px() en el borde exacto del encuadre.
 let afuera = 0;

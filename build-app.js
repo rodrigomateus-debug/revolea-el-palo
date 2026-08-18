@@ -47,7 +47,15 @@ body{font-family:var(--font-body);color:#F4EEDA;overflow:hidden;
   user-select:none;-webkit-user-select:none}
 /* El escenario mantiene el diseño original de 372x808 y se escala a la pantalla:
    así todas las coordenadas absolutas del HUD siguen valiendo, sin distorsión. */
-#wrap{position:fixed;inset:0;display:grid;place-items:center}
+/* Los insets van acá y no en el cálculo de la escala: como webapp en iOS la altura
+   de layout incluye la franja de la barra de inicio, así que el escenario se
+   escalaba más alto que lo visible y el borde de abajo quedaba cortado. Medirlo con
+   visualViewport arreglaría eso pero el teclado también lo encoge, y la pantalla de
+   nombre tiene un input: al escribir el juego se achicaría. Los safe-area insets no
+   los mueve el teclado. */
+#wrap{position:fixed;top:env(safe-area-inset-top);right:env(safe-area-inset-right);
+  bottom:env(safe-area-inset-bottom);left:env(safe-area-inset-left);
+  display:grid;place-items:center}
 #stage{position:relative;width:372px;height:808px;overflow:hidden;background:#1C5638;
   transform:scale(var(--s));transform-origin:center;contain:layout paint}
 .screen{position:absolute;inset:0}
@@ -336,7 +344,13 @@ const stage = $('stage');
 const fit = () => {
   const r = document.getElementById('wrap').getBoundingClientRect();
   const w = r.width || innerWidth, h = r.height || innerHeight;
-  document.documentElement.style.setProperty('--s', Math.min(w / 372, h / 808));
+  const s = Math.min(w / 372, h / 808);
+  // Nunca escribir una escala no positiva. El `|| innerWidth` cubre el caso "rect en
+  // cero" pero no "rect y viewport en cero a la vez", que pasa durante un cambio de
+  // tamaño: ahí --s quedaba en 0, el escenario colapsaba a 0x0 y ningún evento
+  // posterior lo recuperaba, o sea juego invisible. Reproducido redimensionando en
+  // vivo; en un teléfono lo dispara rotar la pantalla.
+  if (s > 0) document.documentElement.style.setProperty('--s', s);
 };
 // ResizeObserver y no sólo el evento resize: el evento no dispara en todos los
 // contextos (documentos embebidos/ocultos) y el escenario quedaba mal escalado.

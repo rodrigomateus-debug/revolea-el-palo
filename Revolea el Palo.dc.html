@@ -999,8 +999,13 @@ class Component extends DCLogic{
       // tamaño en pantalla a cualquier zoom): con el punto de 1 px cada 6 pasos del
       // diseño original el palo avanza ~8 px por paso y quedaban 4 puntos de 0,4 px
       // en pantalla — medido, no estimado. Eso no se lee como un arco.
+      // Contraste: el punto crema al 35% no se lee contra el cielo claro — verificado a
+      // ojo en el teléfono, que es la única forma de verlo. Va un reborde oscuro detrás
+      // y el núcleo crema casi opaco, así el arco se lee sobre cielo y sobre pasto sin
+      // depender de contra qué caiga.
       for(let i=3;i<tr.length;i+=3){const ax=tr[i].x-cam;if(ax>vR)break;
-        if(ax>=vL)this.px(ax,tr[i].y,z,z,'rgba(244,238,218,.35)');}
+        if(ax>=vL){this.px(ax-1,tr[i].y-1,z+2,z+2,'rgba(27,31,40,.5)');
+                   this.px(ax,tr[i].y,z,z,'rgba(244,238,218,.92)');}}
       const o=g.objetivo;
       if(o){
         // marca del punto de impacto
