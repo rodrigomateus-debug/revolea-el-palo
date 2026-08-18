@@ -5,7 +5,11 @@ const fail = [];
 const ck = (n, ok, x) => { if (!ok) fail.push(n + (x !== undefined ? ' :: ' + x : '')); };
 
 // --- rebote ---
-const est = { x: 500, y: M.F.GY - 46, vx: 9, vy: 6 };
+// vx 4 y no 9: 9 quedó ARRIBA del techo cuando VX_MAX bajó a 6,5, y con la entrante
+// arriba del techo el perfecto salía clampeado a 6,5 —o sea MENOS que la entrante— y
+// 'el perfecto empuja horizontalmente' fallaba midiendo una velocidad que el juego no
+// produce. 4 es una velocidad de cadena real, con lugar para acelerar y para castigar.
+const est = { x: 500, y: M.F.GY - 46, vx: 4, vy: 6 };
 const perf = M.resolverRebote(est, 0);
 const bueno = M.resolverRebote(est, (M.F.VENTANA_PERFECTO + M.F.VENTANA_BUENO) / 2);
 const rasp = M.resolverRebote(est, M.F.VENTANA_BUENO + 50);
@@ -35,14 +39,36 @@ const raspRapido = M.resolverRebote({ x: 500, y: 186, vx: 10, vy: 9 }, M.F.VENTA
 ck('el raspón es proporcional a la velocidad entrante, no un piso fijo',
   raspLento.vy !== raspRapido.vy && raspLento.vx !== raspRapido.vx,
   raspLento.vy + '/' + raspLento.vx + ' vs ' + raspRapido.vy + '/' + raspRapido.vx);
+// ...pero con un PISO, porque sin drag nada más frena el palo y una cadena de raspones
+// multiplicaba 0,65 hasta el arco inservible (los 4 huecos clavados de más abajo eran
+// palos con vx 0,36..0,39). El piso lo pone el REBOTE, no el vuelo: paso() no puede
+// tenerlo porque el palo rodando en el suelo termina el vuelo justo cuando |vx| < 0,12.
+// Se aplica a los tres desenlaces, no sólo al raspón: el choque del vuelo hace
+// c.vx *= .22 por fuera del resolutor, y con el piso sólo en el raspón un choque volvía
+// a fabricar la misma clase de palo muerto que un 'bueno' después mantiene tal cual.
+// MUERDE: sacando el piso del resolutor, el raspón desde 0,2 sale en 0,13.
+for (const desf of [0, (M.F.VENTANA_PERFECTO + M.F.VENTANA_BUENO) / 2, M.F.VENTANA_BUENO + 50])
+  ck('ningún rebote deja el palo abajo del piso de vx (desfase ' + desf + ')',
+    M.resolverRebote({ x: 500, y: 186, vx: 0.2, vy: 2 }, desf).vx === M.F.PISO_VX,
+    M.resolverRebote({ x: 500, y: 186, vx: 0.2, vy: 2 }, desf).vx);
+// El piso no puede subir tanto que se coma la proporcionalidad del raspón en las
+// velocidades que el juego visita de verdad: la aserción de arriba corre con vx 3, así
+// que 3*0.65 = 1,95 tiene que seguir estando por encima del piso. Se deja explícito
+// porque es la cota SUPERIOR del piso y es fácil de romper subiéndolo "un poquito".
+ck('el piso de vx deja lugar al castigo del raspón', M.F.PISO_VX < 3 * 0.65,
+  'piso ' + M.F.PISO_VX);
 
 // El arco del rebote perfecto tiene que quedar ABAJO del techo. Si lo clava, el
 // excedente se descarta, todos los arcos de la cadena salen idénticos y la altura
 // deja de ser consecuencia del acierto (con IMPULSO en 7.4 clavaban 165 de 165).
-// El apex depende de vx por el drag: un palo LENTO frena menos y sube más, así que
-// el peor caso no es VX_MAX sino la velocidad de régimen de la cadena, vx≈2,2. Se
-// mide desde la cima más alta (el árbol, h=46), que es la que deja menos aire.
-const apexPerfecto = Math.min(...[1, 2.2, 5, M.F.VX_MAX].map(vx => Math.min(...M.trayectoria(
+// El apex todavía depende de vx, pero ahora sólo por el drag que quedó sobre vy (que se
+// calcula con la velocidad TOTAL): un palo lento arrastra menos y sube más, así que el
+// caso más ajustado es el más LENTO que el juego puede producir, o sea F.PISO_VX. Antes
+// decía 2,2 escrito a mano, que era la velocidad de régimen de cuando el drag frenaba la
+// cadena; hoy el régimen ES el techo y el extremo ajustado se mudó al otro lado. Medido:
+// apex 72,3 en el piso y 78,9 en el techo, con el techo del canvas en 50.
+// Se mide desde la cima más alta (el árbol, h=46), que es la que deja menos aire.
+const apexPerfecto = Math.min(...[M.F.PISO_VX, 2.2, 5, M.F.VX_MAX].map(vx => Math.min(...M.trayectoria(
   { x: 300, y: M.F.GY - 46, vx: vx, vy: M.resolverRebote({ vx: vx, vy: 1 }, 0).vy }, 600
 ).map(p => p.y))));
 ck('el arco perfecto no clava el techo', apexPerfecto > M.F.TECHO + 5,
@@ -296,44 +322,54 @@ ck('la destreza es monótona: menos error ⇒ más puntos',
 // error 0 no hace ninguno. La aserción de 'no muere' de más abajo corre sólo con error
 // 0, así que sin esto los perfiles ruidosos alimentan medianas y señal/ruido y nadie
 // mira si se murieron por culpa del generador.
-// Clavado en 4 EXACTO contra la semilla fija: si da menos falla, y si da más también.
-// Los 4 están medidos y caracterizados, y son finales causados por el JUGADOR y no
-// huecos del generador: un palo que viene de un rebote bueno con vx entre 0,36 y 0,39
-// —3,7% de VX_MAX, contra una mediana de cadena de 1,78— porque cada raspón le come
-// 35% de la velocidad horizontal. Su arco entero avanza 41 px, y esos 41 px los toca
-// recién en el impacto contra el suelo, donde no se puede plantar nada: las alturas de
-// cima, las únicas donde un plantado puede ir, quedan cortas por 1 a 4 px. O sea que no
-// hay plataforma alcanzable, y no porque el generador se la haya olvidado.
-// Las cuatro firmas, todas del perfil de 120 ms:
+// Clavado EXACTO contra la semilla fija: si da menos falla, y si da más también.
+// PASÓ DE [0,4,0,0] A [0,0,0,0], y el cero es FÍSICO y no una limpieza del predicado de
+// exclusión, que no se tocó (sigue midiendo el alcance sobre todo el tramo descendente).
+// Los 4 de antes eran una clase entera de palo, y la clase dejó de existir: eran vuelos
+// que venían de un rebote bueno con vx entre 0,36 y 0,39 —3,7% del techo viejo— porque el
+// drag del vuelo (~21% por segundo) y el 35% de cada raspón se COMPONÍAN. Sacado el drag
+// de vx y puesto F.PISO_VX, la vx más baja que puede tener un palo después de un rebote es
+// el piso (1,2), y el arco más ingrato del piso cruza una cima a 122 px, 3× AVANCE_MIN.
+// Medido sobre los mismos 100 vuelos: 0 huecos, y los excluidos también se movieron —los
+// 'arco corto' pasaron de 20 a 0 (misma razón) y los del pique de 95 a 108.
+// Las cuatro firmas viejas se dejan anotadas porque son la descripción de la clase que se
+// borró, y si alguna vuelve hay que comparar contra esto:
 //   vy=-2,81  vx=0,36  y=183   cortos por: tree 4, cart 1, caddie 2, sdga 2 px
 //   vy=-2,81  vx=0,39  y=207   cortos por: tree 5, cart 2, caddie 3, sdga 3 px
 //   vy=-2,81  vx=0,38  y=197   cortos por: tree 5, cart 1, caddie 3, sdga 3 px
 //   vy=-2,81  vx=0,37  y=182   cortos por: tree 3, cart 1, caddie 1, sdga 1 px
-// La igualdad exacta es deliberada: la semilla está fija y los cuatro casos están
-// documentados, así que un cambio para cualquiera de los dos lados tiene que forzar a un
-// humano a mirar.
-// QUE MUERDE, con la prueba fuerte primero: revertir el arreglo de este mismo diff
-// —comparar `x` (el borde del sprite) en vez de `tr[i].x` (el cruce) dentro de
-// Motor.rellenar— da 24 huecos (200=2, 120=22, 60=0, 0=0) y la aserción cae fuerte.
-// Secundario: con AVANCE_MIN en 230, que mata vuelos de jugadores sanos, da 6 y también
-// cae, con el perfil de 60 ms pasando de 0 a 2.
-// SU LÍMITE, para que un verde no se lea más ancho de lo que es: el predicado de
-// exclusión es geométrico y no tiene constantes ajustadas, pero escala con AVANCE_MIN, y
-// por eso subestima cuánto duele subirlo. Con AVANCE_MIN en 230 los vuelos reales del
-// perfil de 60 ms se mueren 41 veces y este contador reporta 2: la precondición sube con
-// la barra y se come casi toda la señal. Esta aserción prueba "el generador no dejó un
-// hueco"; NO prueba "AVANCE_MIN es entregable por la física", que hoy no tiene test.
+// La igualdad exacta es deliberada: la semilla está fija, así que un cambio para
+// cualquiera de los dos lados tiene que forzar a un humano a mirar.
+// QUE MUERDE, y OJO que los dientes CAMBIARON con la física: hay que decirlo porque los
+// dos mutantes que esta aserción tenía documentados YA NO LA ROMPEN, los dos medidos de
+// nuevo con el vector en cero:
+//   - comparar `x` (el borde del sprite) en vez de `tr[i].x` (el cruce) dentro de
+//     Motor.rellenar: daba 24 huecos, ahora da 0. Con arcos de 700+ px, 5..13 px de media
+//     anchura sobre una barra de 40 px no cambian nada;
+//   - AVANCE_MIN en 230: daba 6, ahora da 0, y encima ya no mata vuelos de jugadores
+//     sanos, porque el arco de la cadena lo cubre de sobra;
+//   - y tampoco muerde REVERTIR el drag sobre vx (da 0): la clase de los 4 necesitaba el
+//     drag Y el techo viejo de 10 juntos.
+// Lo que SÍ muerde hoy, verificado: AVANCE_MIN en 700, o sea del orden del arco de la
+// cadena, da [1,3,1,0] y además tira 'el bot perfecto no muere' (235 pasos) y
+// señal/ruido. Es justo el agujero que el comentario viejo declaraba sin test —"NO prueba
+// que AVANCE_MIN sea entregable por la física"—: ahora lo prueba, pero recién cuando la
+// barra se acerca al largo del arco, que es 17× más arriba que antes.
+// SU LÍMITE, para que un verde no se lea más ancho de lo que es: con la cadena volando a
+// 700+ px por arco, esta aserción quedó FLOJA para todo lo que sea del orden de decenas de
+// px. Lo que hoy protege de verdad es el techo de arriba (que no aparezcan huecos nuevos),
+// no el piso de abajo; el piso lo cuidan las aserciones del piso de vx y la del despegue
+// del par más apretado, en test-generador.js.
 // Se pincha el VECTOR por perfil y no sólo el total: la señal que importa es que un
-// perfil se mueva —el de 60 ms pasando de 0 a 2 es justamente eso— y con el total solo,
-// un +2 acá compensado con un −2 allá queda verde.
+// perfil se mueva, y con el total solo un +2 acá compensado con un −2 allá queda verde.
 // POR QUÉ ESTÁ EN 4 Y NO EN 0: el predicado de exclusión podría medir el alcance sólo a
 // la altura de la cima más baja (GY - 20), que es más correcto en unidades y deja esto
 // en 0. Medido, así también da 0 con AVANCE_MIN en 230, donde mueren vuelos de jugadores
 // sanos: no distingue una cadena sana de una rota. No lo "limpies" a 0 sin volver a
 // medir las dos cosas.
-const HUECOS_CONOCIDOS = [0, 4, 0, 0];   // uno por perfil, en el orden de `perfiles`
+const HUECOS_CONOCIDOS = [0, 0, 0, 0];   // uno por perfil, en el orden de `perfiles`
 const huecosPerfil = corridas.map(rs => rs.reduce((a, r) => a + r.huecos, 0));
-ck('los huecos del generador siguen siendo los 4 conocidos',
+ck('el generador no deja ningún hueco (los 4 conocidos se fueron con el drag)',
   huecosPerfil.every((n, i) => n === HUECOS_CONOCIDOS[i]),
   perfiles.map((e,i)=>e+'ms='+huecosPerfil[i]).join('  ') + ' contra los esperados ' +
   perfiles.map((e,i)=>e+'ms='+HUECOS_CONOCIDOS[i]).join('  ') +
@@ -386,15 +422,19 @@ const peorPasos = Math.min(...impecables.map(r => r.pasos));
 const peorPts = Math.min(...impecables.map(r => r.pts));
 ck('el bot perfecto no muere: vuela hasta el corte', peorPasos >= 39000,
   'el peor de ' + impecables.length + ' vuelos impecables murió a los ' + peorPasos + ' pasos');
-// El presupuesto de legibilidad de test-generador.js corre su cadena de rebotes a
-// vx=9 y no a VX_MAX. Eso vale sólo mientras la cadena de verdad no llegue a 9: si
-// llegara, el presupuesto estaría medido por debajo del peor caso y diría 848 ms
-// donde el jugador ve 758. Acá se mide con el bot, que es el único que corre cadenas
-// largas de verdad. Medido: el peor rebote de los 41 vuelos va a 6,95.
+// El presupuesto de legibilidad de test-generador.js corre su cadena de rebotes a VX_MAX
+// exacto, porque sin drag la cadena se clava en el techo (antes el drag la equilibraba en
+// 7,76 y el presupuesto se medía un paso por debajo del techo). Si algún rebote lo
+// PASARA, el presupuesto estaría medido por debajo del peor caso y diría 818 ms donde el
+// jugador ve menos. Acá se mide con el bot, que es el único que corre cadenas largas de
+// verdad, y ahora la igualdad se toca: el impecable encadena perfectos y llega al techo.
+// MUERDE: sacando el `acotar` de la salida de Motor.resolverRebote, el perfecto hace
+// vx*1.06+0.4 sin techo y esto se va bien arriba de VX_MAX (el acotar de Motor.paso no
+// lo tapa: vxRebote se mide justo después del rebote, antes del próximo paso).
 const peorVxRebote = Math.max(...impecables.map(r => r.vxRebote));
-ck('la cadena nunca llega a la velocidad que supone el presupuesto de legibilidad',
-  peorVxRebote < 9, 'el rebote más rápido fue a vx ' + peorVxRebote.toFixed(2) + ' y el ' +
-  'presupuesto mide la cadena a 9');
+ck('la cadena nunca pasa la velocidad que supone el presupuesto de legibilidad',
+  peorVxRebote <= M.F.VX_MAX, 'el rebote más rápido fue a vx ' + peorVxRebote.toFixed(2) +
+  ' y el presupuesto mide la cadena a ' + M.F.VX_MAX);
 
 // --- sin techo: el score no se satura con el largo del vuelo ---
 // El juego viejo se clavaba en ~5000 y al intento 205 dejaba de mejorar. Esto se mide

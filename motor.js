@@ -18,9 +18,41 @@
     CAM: 48,              // x de pantalla donde la cámara deja el palo
     SEG: 0.09,            // cuánto del camino al objetivo recorre la cámara por frame
     SHAKE_MAX: 7,         // el shake más grande que prende el motor (el del lanzamiento)
-    VX_MAX: 10,           // techo de velocidad horizontal
+    // Techo de velocidad horizontal. Bajó de 10 a 6 y el número no es de gusto: sin el
+    // drag la cadena se clava EN el techo (antes se equilibraba en 7,76 y adentro de cada
+    // arco caía hasta ~4,3, y ese frenado era lo único que sostenía el aviso), así que el
+    // techo pasó a ser LA velocidad a la que el jugador ve venir los obstáculos. Lo fijan
+    // dos cotas medidas, y 6 es el escalón de 0,25 más alto que respeta las dos:
+    //  1) el presupuesto de legibilidad de test-generador.js: a 6,5 da 818 ms y 0 de
+    //     4.000 cortos (el mismo aviso que el juego viejo), a 6,75 cae a 788 ms con 85
+    //     cortos. Cota: 6,5.
+    //  2) la salida del rebote sobre el par más apretado que el generador puede armar
+    //     —un cart (cima 212) y un árbol (cima 186) a SEP_MIN— tiene que despegar sin
+    //     chocar la pared del árbol. Medido con el bot: a 6,5 se mueren 3 de 320 vuelos
+    //     IMPECABLES contra una pared que el jugador no puede evitar (a 6,25, 0 de 320,
+    //     pero el sobre de discretización todavía falla por 2,8 px, o sea que es cuestión
+    //     de tiempo). Cota: 6. La aserción 'el rebote despega del par más apretado' de
+    //     test-generador.js la vigila.
+    // El promedio SUBE aunque el pico baje: 6 constante contra 7,76 que se derretía a 4,3
+    // dentro del arco (media ~5,9). Más distancia por segundo, y siempre la misma.
+    // OJO, margen fino: la cota 2 se cumple por 0,21 px, y el salto al escalón siguiente
+    // es de 3 px porque lo manda un paso de física entero. Cualquier cambio de IMPULSO,
+    // de las alturas de TIPOS o de SEP_MIN lo puede dar vuelta; para eso está la aserción.
+    VX_MAX: 6,
+    // Piso de velocidad horizontal que deja cada rebote. Ver resolverRebote: sin drag el
+    // único freno es el raspón y 0,65 repetido llegaba al arco inservible. 1,2 sale de
+    // dos cotas medidas: por abajo, el arco del rebote bueno más ingrato (palo bajo,
+    // y=210) tiene que cruzar la cima de algún obstáculo más allá de AVANCE_MIN (40 px) y
+    // a 1,2 llega a 122 px, 3× la barra —con 0,4, el régimen de los 4 huecos viejos,
+    // llega a 40,8 px y no alcanza—; por arriba, el raspón tiene que seguir siendo
+    // proporcional en las velocidades que el juego visita, y desde vx 3 deja 1,95, así
+    // que el piso tiene que quedar abajo de eso. Medido en los 143 vuelos del bot, subirlo
+    // a 1,6 no mueve el artefacto de los plantados (10,0% contra 10,1%) y sí le come
+    // castigo al raspón, así que se queda en el valor más bajo que cumple las dos cotas.
+    PISO_VX: 1.2,
     TECHO: 50,            // y mínimo
     ZOOM_VUELO: 2.5,      // cuánto se aleja la cámara durante el vuelo
+    SEP_MIN: 90,          // separación mínima entre obstáculos generados
     AVISO_MIN_MS: 800,    // aviso mínimo entre ver un objetivo y su ventana
     VENTANA_PERFECTO: 60, // ms de tolerancia para el rebote perfecto
     VENTANA_BUENO: 160,   // ms de tolerancia para el rebote bueno
@@ -93,9 +125,11 @@
   // Dónde queda el palo en pantalla de verdad: el objetivo más lo que la cámara se
   // atrasa, o sea max(F.CAM, atrasoCam(vx)). OJO con la dirección: lo que se corre hacia
   // la izquierda es el OBJETIVO del lerp (la cámara se adelanta), no el palo. El palo se
-  // queda en F.CAM hasta que el atraso lo supera y de ahí se va para la DERECHA, unos
-  // 7,6 px a VX_MAX. Contra la cámara vieja, que lo empujaba hasta 36 px a la derecha,
-  // el encuadre se mueve poco y en el otro sentido.
+  // queda en F.CAM hasta que el atraso lo supera y de ahí se va para la DERECHA. Con
+  // VX_MAX en 6 eso ya no le pasa NUNCA a la cadena: el atraso a velocidad de techo es
+  // 36,07 px contra un F.CAM de 48, así que el palo se queda clavado en 48 todo el vuelo y
+  // el único momento en que se corre a la derecha es el lanzamiento (atraso 63,89 a
+  // VX_LANZ, o sea 15,9 px). Antes, con el techo en 10, la cadena lo movía 7,6 px.
   const camPantalla = vx => camObjetivo(vx) + atrasoCam(vx);
   // Px de arco visibles por delante del palo: ESTE es el presupuesto de legibilidad.
   // Depende de la velocidad, así que el que mide tiene que decir a qué velocidad mide;
@@ -113,11 +147,26 @@
 
   // Un paso de física. Es la misma integración que usa el vuelo en vivo, para que
   // la predicción y la realidad no se separen nunca.
+  // El drag ya NO toca vx: la velocidad horizontal es la historia de los toques del
+  // jugador y de nada más. Antes se comía min(0.007, 0.0008 + sp*0.0004) por paso de
+  // física —a velocidad de cadena ~0,4% por paso, o sea ~21% por segundo— y el rebote
+  // 'bueno' devuelve vx sin cambio, así que ENCADENAR TOQUES CORRECTOS era una muerte
+  // lenta: la cadena se equilibraba en 7,8 contra un techo de 10, los arcos se
+  // acortaban y los obstáculos aparecían de la nada en pantalla. Ahora vx entra y sale
+  // igual de cada arco, y sólo la mueve `resolverRebote`.
+  // El acotar se queda y ahora es lo ÚNICO que frena: VX_LANZ (10,63) es la única
+  // velocidad del juego que pasa el techo, y sin drag la cadena de perfectos se clava
+  // EN el techo en vez de equilibrarse abajo. Por eso VX_MAX bajó de 10 a 9: es el
+  // presupuesto de legibilidad el que fija ese número, no el gusto (ver F.VX_MAX).
+  // El drag sobre vy SE QUEDA, y no por inercia: medido, sacarlo alarga el arco del
+  // rebote bueno de 130 a 133 pasos de física y sube el apex, y con eso el aviso mínimo
+  // del presupuesto de legibilidad pasa de 828 a 815 ms — o sea que es lo que da forma
+  // al arco y encima aporta 13 ms de colchón sobre el piso de 800. Cumple una función
+  // real y medida, así que se deja.
   function paso(est) {
     const sp = Math.hypot(est.vx, est.vy);
     const drag = 1 - Math.min(0.007, 0.0008 + sp * 0.0004);
-    let vy = est.vy + F.G, vx = acotar(est.vx * drag, -F.VX_MAX, F.VX_MAX);
-    vy *= drag;
+    let vy = (est.vy + F.G) * drag, vx = acotar(est.vx, -F.VX_MAX, F.VX_MAX);
     let x = est.x + vx, y = est.y + vy;
     if (y < F.TECHO) { y = F.TECHO; if (vy < 0) vy = 0.5; }
     return { x: x, y: y, vx: vx, vy: vy };
@@ -167,9 +216,14 @@
     return { t: t, x: Math.round(x), w: d.w, h: d.h, cima: F.GY - d.h };
   }
 
+  // La separación mínima entre obstáculos sale de acá y no de un literal metido en el
+  // for: es la distancia con la que se mide si el palo puede despegar de un obstáculo
+  // bajo y pasar por encima del alto que viene atrás (ver F.VX_MAX y la aserción 'el
+  // rebote despega del par más apretado'). Escrita en dos lados, la aserción medía una
+  // cancha que el generador ya no produce.
   function generar(rand, desde, hasta) {
     const out = [];
-    for (let x = desde; x < hasta; x += 90 + rand() * 150) out.push(crear(rand, x));
+    for (let x = desde; x < hasta; x += F.SEP_MIN + rand() * 150) out.push(crear(rand, x));
     return out;
   }
 
@@ -326,21 +380,44 @@
   // No se puede bajar mucho más ni dejar el bueno donde estaba: el rebote bueno
   // acorta el arco y con eso el aviso del próximo objetivo. Con IMPULSO 3.6 y el
   // factor viejo de 0.62 el bueno dejaba 94 objetivos de 2000 por debajo de
-  // F.AVISO_MIN_MS; con 0.78 el peor aviso es 848 ms (el piso es 800) y da MÁS aire
-  // que los 818 ms de antes. El barrido completo está en el informe de la Task 7:
-  // arriba de 4.0 el arco clava el techo a la velocidad de régimen (vx≈2,2) y abajo
-  // de 3.9 con 0.62 se cae el presupuesto de legibilidad.
+  // F.AVISO_MIN_MS; con 0.78 el peor aviso es 879 ms (el piso es 800). El barrido
+  // completo está en el informe de la Task 7: arriba de 4.0 el arco clava el techo y
+  // abajo de 3.9 con 0.62 se cae el presupuesto de legibilidad.
+  // Dos de esas mediciones se rehicieron cuando el drag dejó de tocar vx: el peor aviso
+  // pasó de 848 a 879 ms, y el apex más ajustado ya no está en la velocidad de régimen
+  // (que ahora ES el techo) sino en el palo más lento posible, F.PISO_VX. Ojo si se mueve
+  // IMPULSO: también es una de las tres constantes que deciden si el palo puede despegar
+  // de un cart y pasar por encima de un árbol a SEP_MIN, y ahí el margen es de 0,21 px.
   const IMPULSO = 3.6;
 
+  // Ahora que el drag no frena, el único freno de vx es el raspón, y multiplicar 0,65
+  // repetido llega al arco inservible: los 4 huecos clavados de test-destreza.js eran
+  // palos con vx entre 0,36 y 0,39 cuyo arco entero avanzaba 41 px, tan poco que ninguna
+  // altura de cima le quedaba al alcance y el vuelo se moría sin que el generador
+  // pudiera hacer nada. El piso corta esa clase entera.
+  // El piso se aplica a los TRES desenlaces y no sólo al raspón: el choque del vuelo
+  // hace c.vx *= .22 por fuera del resolutor, y un 'bueno' después devuelve vx tal cual,
+  // así que con el piso sólo en el raspón la misma clase de palo muerto volvía por el
+  // camino del choque. Un solo acotar en la salida cubre los dos caminos.
+  // Va en el rebote y NO en paso(): el palo rodando en el suelo termina el vuelo cuando
+  // |vx| < 0,12, así que un piso en la integración le saca ese final y lo deja rodando
+  // hasta el timeout de 3,6 s.
   function resolverRebote(est, desfaseMs) {
     const d = Math.abs(desfaseMs);
-    if (d <= F.VENTANA_PERFECTO)
-      return { tipo: 'perfecto', vy: -IMPULSO, vx: Math.min(F.VX_MAX, est.vx * 1.06 + 0.4) };
-    if (d <= F.VENTANA_BUENO)
-      return { tipo: 'bueno', vy: -IMPULSO * 0.78, vx: Math.min(F.VX_MAX, est.vx) };
-    // Raspón: pierde 35% de velocidad y no gana altura. No termina el vuelo por sí
-    // solo; el palo baja y el jugador todavía puede recuperarse antes del suelo.
-    return { tipo: 'raspon', vy: Math.max(0.5, est.vy * 0.5), vx: est.vx * 0.65 };
+    const r = d <= F.VENTANA_PERFECTO
+      // El perfecto acelera de verdad: sin el drag que se lo comía, 1,06 + 0,4 por toque
+      // sube la cadena del arranque al techo en ~12 perfectos, y eso se ve como arco más
+      // largo y más distancia, no sólo como un número en el HUD.
+      ? { tipo: 'perfecto', vy: -IMPULSO, vx: est.vx * 1.06 + 0.4 }
+      : d <= F.VENTANA_BUENO
+      // El bueno MANTIENE, y ahora mantener quiere decir mantener: antes devolvía vx sin
+      // cambio y el drag se la comía igual.
+      ? { tipo: 'bueno', vy: -IMPULSO * 0.78, vx: est.vx }
+      // Raspón: pierde 35% de velocidad y no gana altura. No termina el vuelo por sí
+      // solo; el palo baja y el jugador todavía puede recuperarse antes del suelo.
+      : { tipo: 'raspon', vy: Math.max(0.5, est.vy * 0.5), vx: est.vx * 0.65 };
+    r.vx = acotar(r.vx, F.PISO_VX, F.VX_MAX);
+    return r;
   }
 
   function comboTras(combo, tipo) {

@@ -252,14 +252,18 @@ const SDGA_EMOJI=["🗿","🦉","🦅","💩","🇮🇪","🥃","🐕","📺"];
 // Ranking de relleno, en la escala NUEVA. Los valores viejos (2.150..13.480) eran de la
 // fórmula de tres tiros con multiplicadores: contra los cientos de miles que da la cadena
 // de rebotes, cualquier vuelo decente barría a los ocho de una y el ranking no medía nada.
-// Escalonados entre la mediana del bot con 120 ms de error (22.851, redondeada a centenas:
+// Escalonados entre la mediana del bot con 120 ms de error (66.407, redondeada a centenas:
 // el escalón de entrada, ya hay que encadenar para pasarlo) y tres veces la del bot
-// impecable (3 × 507.012 = 1.521.036: arriba del techo humano, para que quede a quién
-// perseguir), con los seis del medio repartidos parejo. Los números salen de la línea de
-// medianas que imprime test-destreza.js: si la calibración se mueve, se rehacen de ahí.
-const RECORDS=[["🗿","El Moai",1521000],["🦉","El Búho",1307000],["🦅","El Águila",1093000],
-  ["🥃","Whisky",879000],["🐕","Gonza",664900],["💩","El Bosta",450900],
-  ["🇮🇪","Irlandés",236900],["📺","La Tele",22900]];
+// impecable (3 × 1.630.858 = 4.892.574 → 4.893.000: arriba del techo humano, para que
+// quede a quién perseguir), con los seis del medio repartidos parejo (paso 689.514).
+// Los números salen de la línea de medianas que imprime test-destreza.js: si la
+// calibración se mueve, se rehacen de ahí. Se rehicieron cuando el drag dejó de comerle
+// velocidad al palo: la curva entera se movió (843/22.851/337.175/507.012 →
+// 970/66.407/1.365.986/1.630.858) y con la escala vieja el ranking entero quedaba
+// alcanzable en un vuelo, o sea que ya no había a quién perseguir.
+const RECORDS=[["🗿","El Moai",4893000],["🦉","El Búho",4203500],["🦅","El Águila",3514000],
+  ["🥃","Whisky",2824500],["🐕","Gonza",2134900],["💩","El Bosta",1445400],
+  ["🇮🇪","Irlandés",755900],["📺","La Tele",66400]];
 const AVATARS=["🗿","🦉","🦅","💩","🇮🇪","🥃","🐕","📺","⛳","🏌️","🍖","🧉","🐊","👑","🔥","🤬"];
 const DB_KEY='sdga-palo-v5';
 // Base de jugadores y puntajes. ponytail: localStorage — una fila pesa ~60 bytes
@@ -629,15 +633,17 @@ class Component extends DCLogic{
     const pts=g.puntos+Motor.acreditar(g.combo,tramo);
     if(pts>this.state.record)this.setState({record:pts});
     // UN solo escalonado, para la leyenda y para la fanfarria. Sale de la curva de
-    // destreza MEDIDA (medianas de puntos por error de timing del bot: 200 ms=843,
-    // 120 ms=22.851, 60 ms=337.175, 0 ms=507.012), así que cada leyenda nombra la banda
-    // de precisión en la que cayó el vuelo. Los umbrales viejos (1000/2500/5000/9000)
-    // eran de la escala de tres tiros con multiplicadores: contra los cientos de miles
-    // de ahora, TODO vuelo que encadenaba dos rebotes salía 'HISTÓRICO'.
+    // destreza MEDIDA (medianas de puntos por error de timing del bot: 200 ms=970,
+    // 120 ms=66.407, 60 ms=1.365.986, 0 ms=1.630.858), así que cada leyenda nombra la
+    // banda de precisión en la que cayó el vuelo. Los umbrales viejos
+    // (800/22.900/337.000/507.000) eran las medianas de cuando el drag frenaba el palo;
+    // la velocidad pasó a ser la historia de los toques, la curva se movió 3,2× y con la
+    // escala vieja TODO vuelo que encadenaba salía 'HISTÓRICO' otra vez — el mismo cartel
+    // que se contradice solo que ya nos pasó con la escala de tres tiros.
     // La fanfarria se cuelga de ACÁ y no del green: festeja el puntaje, que es lo que el
     // jugador se ganó.
-    const NIVELES=[[800,'QUÉ VERGÜENZA'],[22900,'ZAFA'],[337000,'BUEN REVOLEO'],
-      [507000,'TREMENDO'],[Infinity,'HISTÓRICO']];
+    const NIVELES=[[1000,'QUÉ VERGÜENZA'],[66400,'ZAFA'],[1366000,'BUEN REVOLEO'],
+      [1631000,'TREMENDO'],[Infinity,'HISTÓRICO']];
     const nivel=NIVELES.findIndex(n=>pts<n[0]),tag=NIVELES[nivel][1];
     if(nivel>=3)this.sfxHole();else if(nivel>=1)this.sfxGreen();else this.sfxLand();
     // El chip dorado dice cómo se terminó la cadena, que es lo único cierto del final de
