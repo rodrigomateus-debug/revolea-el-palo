@@ -83,7 +83,7 @@ ${KEYFRAMES}
 <div id="wrap"><div id="stage">
 
   <!-- ── quién sos ──────────────────────────────────────────── -->
-  <div class="screen hide" id="scr-quien" style="display:flex;flex-direction:column;align-items:center;padding:calc(70px + env(safe-area-inset-top)) 26px calc(24px + env(safe-area-inset-bottom));gap:14px;background:linear-gradient(180deg,#14402A 0%,#1C5638 60%,#0C2B1C 100%);overflow:auto">
+  <div class="screen hide" id="scr-quien" style="display:flex;flex-direction:column;align-items:center;padding:70px 26px 24px;gap:14px;background:linear-gradient(180deg,#14402A 0%,#1C5638 60%,#0C2B1C 100%);overflow:auto">
     <div style="font:600 10px/1 var(--font-body);letter-spacing:.24em;color:#6FAE87;text-transform:uppercase">Elegí tu jugador</div>
     <h1 style="margin:0;font-family:var(--font-display);font-size:40px;font-weight:400;line-height:.9;color:#F4EEDA;text-transform:uppercase;text-align:center;padding:6px 0">¿Quién sos?</h1>
     <div id="playerList" style="display:flex;flex-direction:column;gap:7px;width:100%"></div>
@@ -91,7 +91,7 @@ ${KEYFRAMES}
   </div>
 
   <!-- ── jugador nuevo ──────────────────────────────────────── -->
-  <div class="screen hide" id="scr-nuevo" style="display:flex;flex-direction:column;align-items:center;padding:calc(70px + env(safe-area-inset-top)) 26px calc(24px + env(safe-area-inset-bottom));gap:12px;background:linear-gradient(180deg,#14402A 0%,#1C5638 60%,#0C2B1C 100%);overflow:auto">
+  <div class="screen hide" id="scr-nuevo" style="display:flex;flex-direction:column;align-items:center;padding:70px 26px 24px;gap:12px;background:linear-gradient(180deg,#14402A 0%,#1C5638 60%,#0C2B1C 100%);overflow:auto">
     <div style="font:600 10px/1 var(--font-body);letter-spacing:.24em;color:#6FAE87;text-transform:uppercase">Jugador nuevo</div>
     <h1 style="margin:0;font-family:var(--font-display);font-size:40px;font-weight:400;line-height:.9;color:#F4EEDA;text-transform:uppercase;text-align:center;padding:6px 0">¿Cómo te<br>llamás?</h1>
     <input id="inpNombre" maxlength="14" placeholder="Tu nombre" autocomplete="off" autocapitalize="words" aria-label="Tu nombre"
@@ -105,7 +105,7 @@ ${KEYFRAMES}
   </div>
 
   <!-- ── título ─────────────────────────────────────────────── -->
-  <div class="screen" id="scr-title" style="display:flex;flex-direction:column;align-items:center;padding:calc(70px + env(safe-area-inset-top)) 26px 30px;background:linear-gradient(180deg,#14402A 0%,#1C5638 58%,#0C2B1C 100%)">
+  <div class="screen" id="scr-title" style="display:flex;flex-direction:column;align-items:center;padding:70px 26px 30px;background:linear-gradient(180deg,#14402A 0%,#1C5638 58%,#0C2B1C 100%)">
     <div style="display:flex;align-items:flex-end;gap:7px;height:52px">
       <img src="miguelon/letter-s.svg" style="height:52px;width:auto;transform-origin:50% 100%;animation:letterPop .5s cubic-bezier(.2,.9,.3,1.4) .05s both,letterAlive 3.2s ease-in-out .9s infinite" alt="S">
       <img src="miguelon/letter-d.svg" style="height:50px;width:auto;transform-origin:50% 100%;animation:letterPop .5s cubic-bezier(.2,.9,.3,1.4) .17s both,letterAlive 3.6s ease-in-out 1.25s infinite" alt="D">
@@ -143,7 +143,7 @@ ${KEYFRAMES}
       <span id="quienSoy"></span>
       <span style="font:600 9px/1 var(--font-body);letter-spacing:.14em;color:#6FAE87">Cambiar</span>
     </button>
-    <div style="margin-top:auto;padding-bottom:env(safe-area-inset-bottom)"><button class="btn" id="btnStart">Comenzar</button></div>
+    <div style="margin-top:auto"><button class="btn" id="btnStart">Comenzar</button></div>
   </div>
 
   <!-- ── juego ──────────────────────────────────────────────── -->
@@ -156,7 +156,7 @@ ${KEYFRAMES}
     </div>
     <div id="rGrito" style="position:absolute;left:22px;top:404px;max-width:196px;background:#F4EEDA;color:#0C2B1C;font-family:var(--font-display);font-size:19px;line-height:1.08;padding:10px 14px 11px;border-radius:16px 16px 16px 4px;box-shadow:0 4px 0 rgba(12,43,28,.35);opacity:0;pointer-events:none;transform-origin:8% 100%"></div>
     <div id="rFloat" style="position:absolute;top:300px;left:50%;transform:translateX(-50%);color:#E8C34A;font-family:var(--font-display);font-size:22px;opacity:0;pointer-events:none;text-shadow:0 2px 0 #0C2B1C"></div>
-    <div id="hintBox" style="position:absolute;left:22px;right:22px;bottom:calc(30px + env(safe-area-inset-bottom));pointer-events:none;display:flex;justify-content:center">
+    <div id="hintBox" style="position:absolute;left:22px;right:22px;bottom:30px;pointer-events:none;display:flex;justify-content:center">
       <div id="rHint" style="font-family:var(--font-display);font-size:22px;line-height:1.1;letter-spacing:.04em;color:#F4EEDA;text-transform:uppercase;text-align:center;text-shadow:0 2px 0 rgba(12,43,28,.85)">Mantené apretado · soltá para revolear</div>
     </div>
     <div id="resSheet" class="hide">
@@ -169,14 +169,14 @@ ${KEYFRAMES}
           <div id="resPts" style="margin-top:8px;background:#E8C34A;color:#14402A;font-family:var(--font-display);font-size:13px;letter-spacing:.05em;padding:4px 12px;text-transform:uppercase"></div>
         </div>
       </div>
-      <div style="position:absolute;left:0;right:0;bottom:calc(24px + env(safe-area-inset-bottom));display:flex;justify-content:center;animation:sheetUp .28s cubic-bezier(.2,.9,.3,1.2) both">
+      <div style="position:absolute;left:0;right:0;bottom:24px;display:flex;justify-content:center;animation:sheetUp .28s cubic-bezier(.2,.9,.3,1.2) both">
         <button class="btn" id="btnNext">Ver ranking</button>
       </div>
     </div>
   </div>
 
   <!-- ── ranking ────────────────────────────────────────────── -->
-  <div class="screen hide" id="scr-rank" style="display:flex;flex-direction:column;padding:calc(40px + env(safe-area-inset-top)) 18px calc(20px + env(safe-area-inset-bottom));gap:12px;background:linear-gradient(180deg,#14402A 0%,#1C5638 60%,#0C2B1C 100%);overflow:auto">
+  <div class="screen hide" id="scr-rank" style="display:flex;flex-direction:column;padding:40px 18px 20px;gap:12px;background:linear-gradient(180deg,#14402A 0%,#1C5638 60%,#0C2B1C 100%);overflow:auto">
     <div style="text-align:center">
       <div style="font:600 10px/1 var(--font-body);letter-spacing:.24em;color:#6FAE87;text-transform:uppercase">Ranking histórico</div>
       <div style="font-family:var(--font-display);font-size:28px;line-height:1;color:#F4EEDA;text-transform:uppercase;margin-top:6px">El último revoleo</div>
@@ -345,7 +345,7 @@ const fit = () => {
   const r = document.getElementById('wrap').getBoundingClientRect();
   const w = r.width || innerWidth, h = r.height || innerHeight;
   const s = Math.min(w / 372, h / 808);
-  // Nunca escribir una escala no positiva. El `|| innerWidth` cubre el caso "rect en
+  // Nunca escribir una escala no positiva. El "|| innerWidth" cubre el caso "rect en
   // cero" pero no "rect y viewport en cero a la vez", que pasa durante un cambio de
   // tamaño: ahí --s quedaba en 0, el escenario colapsaba a 0x0 y ningún evento
   // posterior lo recuperaba, o sea juego invisible. Reproducido redimensionando en
@@ -369,6 +369,25 @@ HOST.paint();
 `;
 
 const out = p.join(ROOT, 'index.html');
+// El HTML se arma con un template literal, así que UN SOLO backtick impar en el shell
+// o en el motor lo cierra antes de tiempo y sale un archivo truncado: sin </script> ni
+// </html>, el motor nunca corre y el juego queda muerto mostrando el título estático.
+// Pasó de verdad y se shippeó a producción con las cuatro suites en verde, porque los
+// tests corren contra el .dc.html y nadie miraba el generado. Que el build se niegue a
+// escribir es la única barrera que ve este caso.
+const cierres = ['</script>', '</body>', '</html>', 'HOST.paint();'];
+const faltan = cierres.filter(c => !HTML.includes(c));
+const finEngine = ENGINE.trim().slice(-60);
+if (faltan.length || !HTML.trimEnd().endsWith('</html>') || !HTML.includes(finEngine)) {
+  console.error('BUILD ABORTADO: la salida está incompleta.');
+  if (faltan.length) console.error('  faltan los cierres: ' + faltan.join(', '));
+  if (!HTML.trimEnd().endsWith('</html>')) console.error('  no termina en </html>, termina en: ' +
+    JSON.stringify(HTML.trimEnd().slice(-70)));
+  if (!HTML.includes(finEngine)) console.error('  el final del motor no llegó a la salida: ' +
+    JSON.stringify(finEngine));
+  console.error('  causa típica: un backtick impar en build-app.js o en el .dc.html.');
+  process.exit(1);
+}
 fs.writeFileSync(out, HTML, 'utf8');
 console.log('index.html escrito: ' + (HTML.length / 1024).toFixed(1) + ' KB');
 console.log('motor extraído: ' + (ENGINE.length / 1024).toFixed(1) + ' KB, keyframes: ' + KEYFRAMES.split('\n').length);
