@@ -456,9 +456,8 @@ class Component extends DCLogic{
     try{const p=this._introAudio.play();if(p&&p.catch)p.catch(()=>{});}catch(e){}}
   stopMusic(){if(this._introAudio){try{this._introAudio.pause();}catch(e){}}if(this._titleAudio){try{this._titleAudio.pause();}catch(e){}}}
 
-  newShot(intro){
+  newShot(){
     const g=this.g;g.power=0;g.club=null;g.cam=0;g.rageT=0;g.fx=[];g.dust=[];g.helpers=[];
-    g.greenX=TEE+200*PXM;
     g.greens=[];for(let gm=200;gm<=1200;gm+=200)g.greens.push(TEE+gm*PXM);
     g.rand=Motor.lcg((Math.random()*0x7fffffff)|0);
     g.obs=Motor.generar(g.rand,430,20000);
@@ -476,7 +475,12 @@ class Component extends DCLogic{
     this.paintCombo();
     this.op(this.rMetros,'0');
     this.op(this.rBest,'1');
-    if(intro){g.phase='intro';g.t0=this.now();g.ball={x:TEE+9,y:GY-2,vx:0,rolling:false,hop:0};
+    // La intro guionada (el putt que se pasa de largo) cuenta por qué Miguelón revolea el
+    // palo, y eso se cuenta UNA vez por sesión: son 3 a 5 segundos, y en un juego cuyo
+    // gancho es "una más y listo" pagarlos en cada reintento es la peor parte del trato.
+    // El reintento cae directo en 'ready', con el dedo ya listo para cargar.
+    if(!this.introVista){this.introVista=true;
+      g.phase='intro';g.t0=this.now();g.ball={x:TEE+9,y:GY-2,vx:0,rolling:false,hop:0};
       g.puttLong=Math.random()<.5;g.ballV=g.puttLong?rnd(1.25,1.45):rnd(0.58,0.72);
       this.txt(this.rHint,'Este putt es para ganar el hoyo…');}
     else{g.phase='ready';g.ball=null;this.setHint()}
@@ -503,9 +507,6 @@ class Component extends DCLogic{
   }
   showGrito(txt){const el=this.rGrito.current;if(!el)return;this.sfxGrito();el.textContent=txt;el.style.animation='none';void el.offsetWidth;el.style.animation='gritoPop 1.9s ease-out forwards'}
   showFloat(txt){const el=this.rFloat.current;if(!el)return;el.textContent=txt;el.style.animation='none';void el.offsetWidth;el.style.animation='floatUp 1.4s ease-out forwards'}
-
-  nearGreen(x){const gs=this.g.greens||[this.g.greenX];let best=gs[0];
-    for(const gx of gs)if(Math.abs(gx-x)<Math.abs(best-x))best=gx;return best}
 
   // Un truco es un nombre y nada más: no suma puntos ni multiplica. El único número
   // del HUD es el combo de rebotes, que es el que entra en el puntaje.
@@ -595,31 +596,28 @@ class Component extends DCLogic{
   endShot(){
     const g=this.g;g.phase='done';
     const m=Math.round(Math.max(0,(g.club.x-TEE)/PXM));
-    const dx=Math.abs(g.club.x-this.nearGreen(g.club.x));
-    // El green es COSMÉTICO: da un cartel y una fanfarria, no multiplica nada. El
-    // puntaje es la cadena de rebotes más el último tramo y nada más. Dejar los ×N
-    // escritos era mentirle al jugador sobre de dónde salió su score.
-    let zona='Cayó en el rough',fanfarria=0;
-    if(dx<=10){fanfarria=2;zona='¡LA EMBOCÓ EN EL HOYO!'}
-    else if(dx<=34){fanfarria=1;zona='¡CLAVADA JUNTO AL PALO!'}
-    else if(dx<=85){fanfarria=1;zona='Anillo del medio'}
-    else if(dx<=150){fanfarria=1;zona='Pisó el green'}
     const tramo=Motor.metros(g.club.x)-Motor.metros(g.xTramo);
     const pts=g.puntos+Motor.acreditar(g.combo,tramo);
-    if(fanfarria===2)this.sfxHole();else if(fanfarria)this.sfxGreen();else this.sfxLand();
     if(pts>this.state.record)this.setState({record:pts});
-    // Los escalones salen de la curva de destreza MEDIDA (medianas de puntos por error
-    // de timing del bot: 200 ms=843, 120 ms=22.851, 60 ms=337.175, 0 ms=507.012), así
-    // que cada leyenda nombra la banda de precisión en la que cayó el vuelo. Los
-    // umbrales viejos (1000/2500/5000/9000) eran de la escala de tres tiros con
-    // multiplicadores: contra los cientos de miles de ahora, TODO vuelo que encadenaba
-    // dos rebotes salía 'HISTÓRICO' y la leyenda no decía nada.
-    let tag;
-    if(pts<800)tag='QUÉ VERGÜENZA';
-    else if(pts<22900)tag='ZAFA';
-    else if(pts<337000)tag='BUEN REVOLEO';
-    else if(pts<507000)tag='TREMENDO';
-    else tag='HISTÓRICO';
+    // UN solo escalonado, para la leyenda y para la fanfarria. Sale de la curva de
+    // destreza MEDIDA (medianas de puntos por error de timing del bot: 200 ms=843,
+    // 120 ms=22.851, 60 ms=337.175, 0 ms=507.012), así que cada leyenda nombra la banda
+    // de precisión en la que cayó el vuelo. Los umbrales viejos (1000/2500/5000/9000)
+    // eran de la escala de tres tiros con multiplicadores: contra los cientos de miles
+    // de ahora, TODO vuelo que encadenaba dos rebotes salía 'HISTÓRICO'.
+    // La fanfarria se cuelga de ACÁ y no del green: festeja el puntaje, que es lo que el
+    // jugador se ganó.
+    const NIVELES=[[800,'QUÉ VERGÜENZA'],[22900,'ZAFA'],[337000,'BUEN REVOLEO'],
+      [507000,'TREMENDO'],[Infinity,'HISTÓRICO']];
+    const nivel=NIVELES.findIndex(n=>pts<n[0]),tag=NIVELES[nivel][1];
+    if(nivel>=3)this.sfxHole();else if(nivel>=1)this.sfxGreen();else this.sfxLand();
+    // El chip dorado dice cómo se terminó la cadena, que es lo único cierto del final de
+    // un vuelo. Antes decía la zona del green, y era un cartel que se contradecía solo:
+    // los greens terminan a los 1.200 m y los vuelos reales llegan a decenas de miles,
+    // así que TODO vuelo competente leía 'Cayó en el rough', y uno malo que se moría al
+    // lado de un green podía sacar '¡LA EMBOCÓ EN EL HOYO!' pegado a 'QUÉ VERGÜENZA'.
+    // Tampoco se usa la palabra "anillo": ésa ya nombra el anillo de timing.
+    const cierre=g.club.crashed?'Lo frenó un obstáculo':'Se le cortó la cadena';
     const parts=[m+' m'];
     if(g.puntos)parts.push('+'+g.puntos+' de rebotes');
     if(g.combo>1)parts.push('combo ×'+g.combo);
@@ -628,7 +626,7 @@ class Component extends DCLogic{
     this.op(this.rBest,'0');
     this.op(this.rTricks,'0');
     this.setState({best:m,points:pts,showRes:true,
-      res:{m:pts+' PTS',tag:tag,note:note,pts:zona,kicker:'Se terminó el revoleo',label:'Ver ranking'}});
+      res:{m:pts+' PTS',tag:tag,note:note,pts:cierre,kicker:'Se terminó el revoleo',label:'Ver ranking'}});
   }
   // Un solo vuelo por ronda: del resultado se va derecho al ranking.
   next=()=>{
@@ -642,8 +640,8 @@ class Component extends DCLogic{
   nuevoJugador=()=>{this.sfxButton();this.setState({screen:'nuevo',nombre:'',emoji:AVATARS[0]})}
   cambiarJugador=()=>{this.sfxButton();this.stopMusic();
     this.setState({screen:DB.read().players.length?'quien':'nuevo'})}
-  start=()=>{this.sfxButton();this.fadeMusic(350);this.heliOff();this.setState({screen:'play',best:0,points:0,showRes:false},()=>this.newShot(true))}
-  again=()=>{this.sfxButton();this.stopMusic();this.heliOff();this.setState({screen:'play',best:0,points:0,showRes:false},()=>this.newShot(true))}
+  start=()=>{this.sfxButton();this.fadeMusic(350);this.heliOff();this.setState({screen:'play',best:0,points:0,showRes:false},()=>this.newShot())}
+  again=()=>{this.sfxButton();this.stopMusic();this.heliOff();this.setState({screen:'play',best:0,points:0,showRes:false},()=>this.newShot())}
   toTitle=()=>{this.setState({screen:'title'});this.startMusic();}
 
   // Un solo gesto en todo el juego: apretar y soltar para lanzar, tocar para rebotar.

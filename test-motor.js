@@ -109,8 +109,9 @@ c.componentDidMount();
 function ticks(n, msPerTick = 1000 / 60) {
   for (let i = 0; i < n; i++) { VT += msPerTick; c.tick(VT); }
 }
-// La intro es un putt de largo aleatorio, así que hay que esperar por estado y no
-// por una cantidad fija de frames.
+// La intro guionada (el putt que se pasa de largo) dura un rato aleatorio, así que hay
+// que esperar por estado y no por una cantidad fija de frames. Corre UNA vez por sesión:
+// desde el segundo newShot el juego arranca directo en 'ready'.
 function until(d, pred, max = 4000) {
   for (let i = 0; i < max; i++) { if (pred()) return true; VT += 1000 / 60; d.tick(VT); }
   return pred();
@@ -120,10 +121,10 @@ const fail = [];
 const ck = (name, ok, extra) => { if (!ok) fail.push(name + (extra ? ' :: ' + extra : '')); };
 
 ck('loop arrancado en title? no', !c.raf);
-c.start();                      // -> screen play, newShot(true)
+c.start();                      // -> screen play, newShot()
 ck('loop corriendo en play', !!c.raf);
 
-// intro (el putt fallado) + espera a que pase a ready
+// intro guionada (el putt que se pasa de largo) + espera a que pase a ready
 ck('fase ready tras la intro', until(c, () => c.g.phase === 'ready'), c.g.phase);
 
 // Escenario DETERMINISTA. newShot siembra con Math.random(), así que sin fijar la

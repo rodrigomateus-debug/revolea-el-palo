@@ -27,13 +27,31 @@ ck('la cima es el techo del obstáculo', obs.every(o => o.cima === M.F.GY - o.h)
 ck('el lcg es determinista',
   JSON.stringify(M.generar(M.lcg(12345), 400, 6000)) === JSON.stringify(obs));
 
+// Velocidad a la que se corren las cadenas sintéticas de este archivo. NO es un 9 escrito
+// a mano: es un paso por debajo del techo, y el techo es lo que la hace legítima.
+//
+// Por qué un paso por debajo y no el techo mismo: medido, el presupuesto se cumple a 9
+// (818 ms, 0 de 4.000 cortos) y NO se cumple a 10 (758 ms, 263 cortos). Lo que salva la
+// diferencia no está en esta cuenta: es el drag de `Motor.paso`, que frena la cadena real
+// en 7,8 (medido sobre 300 rebotes de vuelos impecables; la aserción 'la cadena nunca
+// llega a la velocidad que supone el presupuesto' de test-destreza.js lo vigila con el
+// bot). O sea que este presupuesto se apoya en DOS constantes que no aparecen acá: el
+// techo y el drag.
+//
+// Derivarlo del techo ata la primera. Antes decía `9` y `Math.min(F.VX_MAX, 9)`, que con
+// VX_MAX en 16 sigue dando 9: subir el techo —la Task 3 lo bajó de 16 a 10 justamente por
+// legibilidad— dejaba este archivo imprimiendo TODO OK y el regreso lo cazaba de refilón
+// el vector dorado de test-destreza.js, que no nombra la legibilidad. Verificado: con
+// VX_MAX en 16 la cadena corre a 15, el aviso mínimo cae a 727 ms y esto se pone rojo.
+const VX_CADENA = M.F.VX_MAX - 1;
+
 // Las dos fuerzas de rebote se le PREGUNTAN al resolutor en vez de escribirlas a
 // mano. Estaban clavadas en -7.4 y -4.6 y la calibración de la Task 7 movió el
 // impulso a 3.6 y el factor del bueno a 0.78: los tests de solvencia y de
 // legibilidad hubieran seguido midiendo dos arcos que el juego ya no produce, y el
 // presupuesto de legibilidad —que es justo lo que la baja de impulso pone en
 // riesgo— se hubiera medido con el arco viejo, largo, que siempre pasa.
-const EST0 = { x: 300, y: M.F.GY - 60, vx: 9, vy: 3 };
+const EST0 = { x: 300, y: M.F.GY - 60, vx: VX_CADENA, vy: 3 };
 const VY_PERFECTO = M.resolverRebote(EST0, 0).vy;
 const VY_BUENO = M.resolverRebote(EST0, (M.F.VENTANA_PERFECTO + M.F.VENTANA_BUENO) / 2).vy;
 
@@ -47,14 +65,14 @@ for (const vyRebote of [VY_PERFECTO, VY_BUENO]) {
     const r = M.lcg(s);
     const esc = M.generar(r, 400, 20000);
     // se simula una cadena de rebotes con la misma fuerza desde varios puntos
-    let est = { x: 300, y: M.F.GY - 60, vx: 9, vy: vyRebote };
+    let est = { x: 300, y: M.F.GY - 60, vx: VX_CADENA, vy: vyRebote };
     for (let reb = 0; reb < 25; reb++) {
       M.rellenar(esc, r, est);
       const alc = M.alcanzables(esc, est);
       probados++;
       if (!alc.length) { sinSalida++; break; }
       const o = alc[0];
-      est = { x: o.x + o.w / 2, y: o.cima, vx: Math.min(M.F.VX_MAX, 9), vy: vyRebote };
+      est = { x: o.x + o.w / 2, y: o.cima, vx: VX_CADENA, vy: vyRebote };
     }
   }
   ck('el generador nunca deja un hueco sin salida (vy=' + vyRebote + ')', sinSalida === 0,
@@ -71,7 +89,7 @@ let planto = 0, sinSalidaRaspon = 0, yaAlcanzable = 0;
 for (let s = 1; s <= 300; s++) {
   const r = M.lcg(s);
   const esc = M.generar(r, 400, 20000);
-  const est = { x: 300, y: M.F.GY - 46, vx: 9, vy: 2 };
+  const est = { x: 300, y: M.F.GY - 46, vx: VX_CADENA, vy: 2 };
   const resultado = M.rellenar(esc, r, est);
   const alc = M.alcanzables(esc, est);
   // la invariante es "desde un rebote que recuperó altura" (vy < 0): un
@@ -109,20 +127,13 @@ for (const vyRebote of [VY_PERFECTO, VY_BUENO]) {
   for (let s = 1; s <= 200; s++) {
     const r = M.lcg(s * 7);
     const esc = M.generar(r, 400, 20000);
-    // Los 9 de la cadena NO son un VX_MAX escrito flojo, y son dos cosas distintas:
-    // ADEL_PEOR (cuánto arco se ve por delante) se mide a VX_MAX porque el atraso de
-    // la cámara es instantáneo y el palo sí toca 10,63 en el lanzamiento; la VELOCIDAD
-    // DE LA CADENA es otra cosa, y medida sobre 300 rebotes de vuelos impecables no
-    // pasa nunca de 6,95 (mediana 1,78, p95 3,96): el drag se la come dentro del
-    // primer arco y el rebote perfecto, que hace vx*1.06+0.4, no le gana. Así que 9 ya
-    // está por encima de lo alcanzable y la medición es conservadora de este lado.
-    // Correrla a VX_MAX da 758 ms con 119 objetivos cortos, pero es un estado al que
-    // la cadena no llega — y da lo mismo con el impulso viejo de 7.4 (758 ms, 87
-    // cortos), así que no es algo que haya traído la calibración.
-    // Lo que sostiene el 9 es la aserción 'la cadena nunca llega a la velocidad que
-    // supone el presupuesto de legibilidad' de test-destreza.js, que corre el bot y
-    // falla si algún rebote lo supera.
-    let est = { x: 300, y: M.F.GY - 60, vx: 9, vy: vyRebote };
+    // VX_CADENA y ADEL_PEOR son dos cantidades distintas y las dos están arriba con su
+    // justificación: la velocidad de la cadena sale del techo (ver VX_CADENA) y el arco
+    // visible por delante se mide en el lanzamiento (ver ADEL_PEOR). Lo que sostiene que
+    // la cadena real no pase de VX_CADENA es la aserción 'la cadena nunca llega a la
+    // velocidad que supone el presupuesto de legibilidad' de test-destreza.js, que corre
+    // el bot y falla si algún rebote lo supera.
+    let est = { x: 300, y: M.F.GY - 60, vx: VX_CADENA, vy: vyRebote };
     for (let reb = 0; reb < 10; reb++) {
       M.rellenar(esc, r, est);
       const alc = M.alcanzables(esc, est);
@@ -130,7 +141,7 @@ for (const vyRebote of [VY_PERFECTO, VY_BUENO]) {
       const o = alc[0], ms = M.avisoMs(est, o, ADEL_PEOR);
       medidos++; minAviso = Math.min(minAviso, ms);
       if (ms < M.F.AVISO_MIN_MS) cortos++;
-      est = { x: o.x + o.w / 2, y: o.cima, vx: Math.min(M.F.VX_MAX, 9), vy: vyRebote };
+      est = { x: o.x + o.w / 2, y: o.cima, vx: VX_CADENA, vy: vyRebote };
     }
   }
 }
@@ -146,7 +157,7 @@ for (const vyRebote of [VY_PERFECTO, VY_BUENO]) {
   for (let s = 1; s <= 300; s++) {
     const r = M.lcg(s);
     const esc = M.generar(r, 400, 20000);
-    let est = { x: 300, y: M.F.GY - 60, vx: 9, vy: vyRebote };
+    let est = { x: 300, y: M.F.GY - 60, vx: VX_CADENA, vy: vyRebote };
     for (let reb = 0; reb < 25; reb++) {
       M.rellenar(esc, r, est);
       const alc = M.alcanzables(esc, est);
@@ -156,7 +167,7 @@ for (const vyRebote of [VY_PERFECTO, VY_BUENO]) {
         if (M.avisoMs(est, o, ADEL_PEOR) === Infinity) infinitosEnAlcanzable++;
       }
       const o = alc[0];
-      est = { x: o.x + o.w / 2, y: o.cima, vx: Math.min(M.F.VX_MAX, 9), vy: vyRebote };
+      est = { x: o.x + o.w / 2, y: o.cima, vx: VX_CADENA, vy: vyRebote };
     }
   }
 }

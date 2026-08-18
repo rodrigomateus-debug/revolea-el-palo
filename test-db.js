@@ -114,7 +114,6 @@ ck('la base guarda 2 rondas', raw.scores.length === 2, raw.scores.length);
 ck('cada ronda tiene jugador, puntos, metros y fecha',
   raw.scores.every(s => s.p && typeof s.pts === 'number' && typeof s.m === 'number' && s.at > 0),
   JSON.stringify(raw.scores[0]));
-const hist = g.renderVals ? null : null;
 const C2 = raw.players.find(p => p.name === 'Rodrigo');
 ck('el mejor puntaje quedó en el jugador', C2.best === total1, C2.best + ' vs ' + total1);
 
@@ -147,6 +146,8 @@ g = load();
 const v5 = JSON.parse(store['sdga-palo-v5'] || '{"players":[],"scores":[]}');
 ck('migra el jugador viejo', v5.players.some(p => p.name === 'Lechu'), JSON.stringify(v5.players));
 ck('le resetea el best', v5.players.every(p => p.best === 0), JSON.stringify(v5.players));
+// El spec migra nombre Y emoji: sin esto, una migración que se olvidara del emoji pasaba.
+ck('le conserva el emoji', v5.players.every(p => p.emoji === '🥃'), JSON.stringify(v5.players));
 ck('no arrastra puntajes de la escala vieja', v5.scores.length === 0, v5.scores.length);
 // Migrado ⇒ hay jugadores ⇒ arranca en el selector y no en el alta. Sin esto,
 // "migra" podría pasar con una base que el juego no llega a leer.

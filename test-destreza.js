@@ -84,6 +84,11 @@ const cuerpo = /<script type="text\/x-dc"[^>]*>([\s\S]*?)<\/script>/
 ck('el motor usa Motor.resolverRebote', /Motor\.resolverRebote/.test(cuerpo));
 ck('el motor usa Motor.acreditar', /Motor\.acreditar/.test(cuerpo));
 ck('el motor usa Motor.rellenar', /Motor\.rellenar/.test(cuerpo));
+// Faltaba, y era el hueco más grande de la suite: borrar el `*factor` de la línea del
+// puntaje desconecta la regla de variedad entera y los cuatro suites quedaban verdes.
+// Éste es el PISO —prueba que el string está— y la aserción de comportamiento que mide
+// dos vuelos reales está más abajo, con el bot.
+ck('el motor usa Motor.factorVariedad', /Motor\.factorVariedad/.test(cuerpo));
 ck('ya no hay aletazos', !/g\.air/.test(cuerpo), 'quedó g.air en el motor');
 ck('hay un método tocar()', /tocar\s*\(\s*\)\s*\{/.test(cuerpo));
 
@@ -153,7 +158,12 @@ const TOPE = 40000;   // pasos de lógica: dónde se corta el vuelo del bot
 // El sorteo usa su propio LCG y no Math.random: la medición de ruido necesita que
 // el azar del bot y el del escenario sean independientes, y Math.random acá es el
 // del escenario.
-function vuelo(errorMs, semilla, tope) {
+// `monotono` hace que el bot toque SIEMPRE con la racha del tipo del objetivo ya llena,
+// o sea el jugador que le pega una y otra vez al mismo tipo de obstáculo. No toca la
+// física —`ultimosTipos` sólo entra en el factor de variedad— así que con la misma
+// semilla y el mismo error el vuelo es EL MISMO arco y la única diferencia posible en el
+// score es la regla de variedad.
+function vuelo(errorMs, semilla, tope, monotono) {
   const { C, adv, now } = arnes();
   const c = new C();
   c.props = { censura: 'Sin filtro', sonido: false };
@@ -196,7 +206,10 @@ function vuelo(errorMs, semilla, tope) {
         objAnt = g.objetivo; pasoAnt = g.pasoObjetivo;
         kToque = Math.round(-(pulso() * 2 - 1) * errorMs / msPaso);
       }
-      if (g.pasoObjetivo - (g.pasosVuelo || 0) <= kToque) c.tocar();
+      if (g.pasoObjetivo - (g.pasosVuelo || 0) <= kToque) {
+        if (monotono) g.ultimosTipos = [g.objetivo.t, g.objetivo.t, g.objetivo.t, g.objetivo.t];
+        c.tocar();
+      }
     }
   }
   // tick() se come las excepciones del loop en window.__loopErr. Sin esto un vuelo
@@ -341,6 +354,29 @@ ck('señal/ruido > 3', senal > ruido * 3,
   ' = ' + (senal / Math.max(1, ruido)).toFixed(2));
 
 const perfecto = vuelo(0, 777);
+
+// --- la regla de variedad, CABLEADA (no sólo unitaria) ---
+// El mismo vuelo dos veces: mismo error (0, o sea sin sorteo), misma semilla, mismo arco.
+// La única diferencia es que el segundo bot le pega siempre al mismo TIPO de obstáculo.
+// Si la variedad entra en el puntaje, tiene que pagarle menos. Es la aserción que faltaba:
+// las unitarias de `factorVariedad` de arriba pasan igual con la regla desconectada, y
+// borrar el `*factor` de la línea del puntaje del motor dejaba los cuatro suites verdes.
+// MUERDE: sin el `*factor` los dos vuelos dan exactamente el mismo score y esto cae.
+const monotono = vuelo(0, 777, undefined, true);
+ck('la variedad entra en el puntaje: repetir el mismo tipo de obstáculo paga menos',
+  monotono.pts < perfecto.pts,
+  'variando ' + perfecto.pts + ' contra ' + monotono.pts + ' repitiendo, con el mismo arco');
+// Y que no sea una diferencia de redondeo: sin esto, un `factor` aplicado a un solo
+// eslabón pasaría el `<` de arriba. Medido: repitiendo saca el 60% de lo que saca
+// variando. No es el 20% que haría pensar el factor 1/5 de una racha llena, y la razón
+// vale anotarla: el vuelo "variado" TAMPOCO varía tanto, porque `Motor.rellenar` planta
+// recorriendo CLAVES en orden y 'tree' sale primero, así que la cadena normal ya viene
+// con rachas y ya paga parte del descuento. La vara va en 0,8 para que el margen sea el
+// medido y no el teórico.
+ck('y paga bastante menos, no dos puntos menos', monotono.pts < perfecto.pts * 0.8,
+  'repitiendo saca ' + (monotono.pts / Math.max(1, perfecto.pts) * 100).toFixed(0) +
+  '% de lo que saca variando');
+
 // Los dos pisos se miden en el PEOR de los 41 vuelos impecables y no en uno solo:
 // "no muere nunca" verificado en una semilla es la clase de garantía flojita que ya
 // costó tres rondas de arreglos. Los 40 vuelos del ruido son con error 0, así que
