@@ -103,7 +103,7 @@ const Component = new Function('DCLogic', 'React', 'window', 'document', 'perfor
   m[1] + '\nreturn Component;')(DCLogic, React, window, document, performance);
 
 const c = new Component();
-c.props = { tiros: 3, censura: 'Sin filtro', viento: true, sonido: true };
+c.props = { censura: 'Sin filtro', sonido: true };
 c.componentDidMount();
 
 function ticks(n, msPerTick = 1000 / 60) {
@@ -245,7 +245,7 @@ ck('buffers de ruido cacheados (<12)', (stats.buffersMade || 0) < 12, 'creados '
 // con la misma corrida y cull() anulado para confirmar que la poda hace algo.
 function longFlight(withCull) {
   const d = new Component();
-  d.props = { tiros: 3, censura: 'Sin filtro', viento: false, sonido: false };
+  d.props = { censura: 'Sin filtro', sonido: false };
   VT += 1e5; d.componentDidMount(); d.start();
   if (!withCull) d.cull = () => {};
   if (!until(d, () => d.g.phase === 'ready')) throw new Error('la intro no terminó');
@@ -276,7 +276,7 @@ ck('vuelo largo sin errores', !withCull.err, withCull.err);
 // sin importar el ritmo de frames (60 Hz vs 120 Hz vs frames irregulares).
 function stepsOver(msPerTick, totalMs) {
   const d = new Component();
-  d.props = { tiros: 3, censura: 'Sin filtro', viento: false, sonido: false };
+  d.props = { censura: 'Sin filtro', sonido: false };
   VT = 1e6; d.componentDidMount(); d.start();
   let n = 0; const orig = d.step.bind(d);
   d.step = () => { n++; orig(); };
@@ -293,7 +293,7 @@ ck('30 Hz da los mismos pasos que 60 Hz', Math.abs(s30 - s60) <= 6, s30 + ' vs '
 
 // hipo grande: no debe intentar recuperar la deuda de golpe
 const d = new Component();
-d.props = { tiros: 3, censura: 'Sin filtro', viento: false, sonido: false };
+d.props = { censura: 'Sin filtro', sonido: false };
 VT = 2e6; d.componentDidMount(); d.start();
 let burst = 0; const o2 = d.step.bind(d); d.step = () => { burst++; o2(); };
 VT += 5000; d.tick(VT);
@@ -305,7 +305,7 @@ ck('hueco de 5 s no dispara catch-up', burst <= 4, burst + ' pasos');
 // se graba cada draw() y se afirma lo que un humano miraría. Lo que NO cubre esto:
 // si el pixel art se lee bien al zoom de 2,5x. Eso es juicio humano y queda abierto.
 const ARCO = 'rgba(244,238,218,.35)', ORO = '#E8C34A';
-const PROPS = { tiros: 3, censura: 'Sin filtro', viento: false, sonido: false };
+const PROPS = { censura: 'Sin filtro', sonido: false };
 function reposo() {
   const d = new Component();
   d.props = PROPS;
@@ -407,8 +407,9 @@ const adel = [];
 const TRONCO = '#3D2A18'; // el tronco del árbol: un color que no usa nada más
 const ENC = Motor.encuadre(Motor.F.ZOOM_VUELO);
 // Lo que el presupuesto de legibilidad de test-generador.js da por sentado: en el peor
-// caso (a VX_MAX) se ven ADEL_PEOR px de arco por delante del palo.
-const ADEL_PEOR = Motor.adelante(Motor.F.ZOOM_VUELO, Motor.F.VX_MAX);
+// caso (a VX_LANZ, la velocidad del lanzamiento, que es la única que pasa el clamp) se
+// ven ADEL_PEOR px de arco por delante del palo.
+const ADEL_PEOR = Motor.adelante(Motor.F.ZOOM_VUELO, Motor.F.VX_LANZ);
 espiarShake(dr);
 for (let i = 0; i < 60000 && dr.g.phase === 'fly'; i++) {
   // El shake queda PUESTO: es parte de lo que el jugador ve y Motor.adelante lo descuenta.
@@ -514,11 +515,7 @@ function volando(frames) {
 function trasFrenada(preparar) {
   const d = volando(40), c = d.g.club;
   // Estado explícito antes de medir. El vuelo que viene de arriba depende de
-  // Math.random() (el largo de la intro), y sin fijar esto el fixture era flaky: una
-  // corrida forzó el pique justo arriba de un bunker, que termina el tiro en un frame
-  // ('vx 9.95 -> 0.00 en 1 frames') y no mide nada. Los bunkers se sacan porque el
-  // fixture es sobre la cámara, no sobre dónde cae el palo.
-  d.g.bunkers = [];
+  // Math.random() (el largo de la intro), y sin fijarlo el fixture era flaky.
   c.y = 100; c.vy = -1; c.grounded = false; c.crashed = false;
   // El punto ciego es frenar DESDE la velocidad máxima, no desde una cualquiera: se lo
   // lleva a VX_MAX y se deja que la cámara llegue al régimen de esa velocidad (ahí el

@@ -156,7 +156,7 @@ const TOPE = 40000;   // pasos de lógica: dónde se corta el vuelo del bot
 function vuelo(errorMs, semilla, tope) {
   const { C, adv, now } = arnes();
   const c = new C();
-  c.props = { tiros: 1, censura: 'Sin filtro', viento: false, sonido: false };
+  c.props = { censura: 'Sin filtro', sonido: false };
   c.componentDidMount();
   c.state.player = { id:'x', name:'bot', emoji:'x', best:0 };
   let s = semilla; Math.random = () => (s = (s*1103515245+12345) & 0x7fffffff) / 0x7fffffff;

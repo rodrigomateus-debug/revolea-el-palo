@@ -29,6 +29,21 @@
   const acotar = (v, a, b) => (v < a ? a : v > b ? b : v);
   const metros = x => Math.round(Math.max(0, (x - F.TEE) / F.PXM));
 
+  // Velocidad de salida del lanzamiento. Vive acá y no en el componente porque el
+  // presupuesto de legibilidad se mide con ella y escrita en dos lados se desincroniza.
+  const vLanzamiento = (potencia, perfecto) => 5.4 + potencia * (perfecto ? 1.12 : 1) * 8.6;
+  // vx del lanzamiento a potencia plena y con el ángulo por defecto (45°): 10,63. Es la
+  // ÚNICA velocidad del juego que supera VX_MAX, y es el peor encuadre: `adelante`
+  // evaluado en el clamp promete 182,4 px de arco por delante y en ese instante hay
+  // 178,6. Los 3,8 px de diferencia son la razón por la que el peor aviso medido en
+  // vuelos reales (788 ms) cae abajo del piso de 800 y la cadena sintética, que arranca
+  // de un rebote y nunca pasa de 6,95, no lo veía.
+  // OJO CON EL ÁNGULO: el jugador puede arrastrar hasta 15°, y ahí vx sale 14,52. No
+  // entra en este número a propósito — `paso` clampea antes de mover el palo, así que
+  // ni la posición ni la cámara ven nunca más de VX_MAX y el atraso real está acotado
+  // por el clamp igual. Lo que este número cubre es el estado con el que se MIDE.
+  F.VX_LANZ = Math.cos(Math.PI / 4) * vLanzamiento(1, true);
+
   // El campo visible, en unidades lógicas, para un zoom dado. UNA sola derivación,
   // que usan tanto el que dibuja como el que mide: draw() pinta con
   // setTransform(2/z,0,0,2/z, W*(z-1)/3, GY*(z-1)/2), así que el punto lógico que cae
@@ -82,7 +97,9 @@
   const camPantalla = vx => camObjetivo(vx) + atrasoCam(vx);
   // Px de arco visibles por delante del palo: ESTE es el presupuesto de legibilidad.
   // Depende de la velocidad, así que el que mide tiene que decir a qué velocidad mide;
-  // el peor caso es F.VX_MAX.
+  // el peor caso es F.VX_LANZ (el lanzamiento), no F.VX_MAX: es la única velocidad del
+  // juego que pasa el clamp, y medir en el clamp dejaba el instante del lanzamiento
+  // —justo donde el aviso mínimo real cae abajo del piso— fuera del modelo.
   // El shake entra acá porque el jugador lo ve: draw() corre el transform hasta shake px
   // de dispositivo al azar, o sea shake*zoom/2 px lógicos, y en el peor sorteo eso se come
   // borde derecho. Estuvo afuera del modelo un rato con la excusa de que es simétrico y
@@ -345,7 +362,7 @@
   }
 
   const api = { F: F, acotar: acotar, metros: metros, encuadre: encuadre,
-                camObjetivo: camObjetivo, adelante: adelante,
+                camObjetivo: camObjetivo, adelante: adelante, vLanzamiento: vLanzamiento,
                 paso: paso, trayectoria: trayectoria,
                 TIPOS: TIPOS, AVANCE_MIN: AVANCE_MIN,
                 lcg: lcg, generar: generar, alcanzables: alcanzables,

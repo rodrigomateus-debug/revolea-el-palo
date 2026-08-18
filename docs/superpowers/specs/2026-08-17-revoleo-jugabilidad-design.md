@@ -173,16 +173,29 @@ Con (1) y (2) el aviso pasa de 0,16 s a ~1 s. El (3) convierte "adivinar" en
 **Requisito medible:** entre que un objetivo se hace visible y se abre su ventana
 de toque debe haber ≥ 0,8 s.
 
-Los valores 2,5× y 10 px/paso son puntos de partida a calibrar contra ese
-requisito, no constantes sagradas.
+**Valores finales, medidos:** `ZOOM_VUELO = 2,5` y `VX_MAX = 10` quedaron donde
+arrancaron — el requisito se cumple sin moverlos. La cadena de rebotes avisa como
+mínimo **818 ms** (piso 800), con 0 de 4.000 objetivos por debajo, midiendo en el
+peor encuadre: `F.VX_LANZ = 10,63`, la velocidad del lanzamiento, que es la única
+del juego que supera `VX_MAX` y deja **178,6 px** de arco por delante del palo
+(194,5 px con el palo lento). Antes se medía en el clamp y prometía 182,4 px.
+
+**Hueco conocido, no cerrado:** en vuelos reales el peor aviso es **788 ms** en 76
+de 9.379 objetivos plantados (0,8%), todos en el primer objetivo después del
+lanzamiento. Medir en la velocidad real del lanzamiento en vez del clamp NO lo
+mueve: el aviso está cuantizado en pasos de física de 30,3 ms y el palo cubre
+~10 px por paso, así que 3,8 px de encuadre no alcanzan para correr un paso. La
+causa es geométrica (el objetivo se planta a partir de `AVANCE_MIN = 40` px y ahí
+el palo va a máxima velocidad), no la cámara.
 
 ### Qué se elimina
 
 Diseño y código menos:
 
 - Viento aleatorio.
-- El ×5 del green como lotería. Los greens pasan a ser trampolines premium
-  apuntables (más ganancia de combo).
+- El ×5 del green como lotería. Los greens quedaron **cosméticos**: dan un cartel
+  y una fanfarria al aterrizar y nada más. No se hicieron trampolines premium
+  (habría sido otra mecánica sin objetivo medible que resolver).
 - El ÷2 del bunker.
 - La fase de putt completa (`startPutt`, `firePutt`, fases `putt`/`puttcharge`).
 - La estructura de 3 tiros: un vuelo por partida.
@@ -202,9 +215,19 @@ escala incomparable con la fórmula nueva.
 - La clave de `localStorage` pasa de `sdga-palo-v4` a `sdga-palo-v5`, para que no
   se mezclen puntajes de escalas distintas. Los jugadores (nombre, emoji) se
   migran; los `best` y el log de `scores` arrancan limpios.
-- Las leyendas hardcodeadas (`RECORDS`) se recalibran **después** de implementar,
-  midiendo con el bot de pruebas qué puntajes producen distintos niveles de
-  precisión. Fijar los números antes de tener la fórmula andando sería inventar.
+- Las leyendas hardcodeadas (`RECORDS`) quedaron recalibradas contra la curva de
+  destreza medida por el bot (medianas de puntos por error de timing: **200 ms =
+  843, 120 ms = 22.851, 60 ms = 337.175, 0 ms = 507.012**, señal/ruido 8,89).
+  Ocho escalones parejos entre la mediana del perfil de 120 ms redondeada a
+  centenas (La Tele, 22.900) y tres veces la del perfil impecable (El Moai,
+  1.521.000): 22.900 · 236.900 · 450.900 · 664.900 · 879.000 · 1.093.000 ·
+  1.307.000 · 1.521.000.
+- Las leyendas del resultado de `endShot` salen de la MISMA curva, así que cada
+  una nombra la banda de precisión en la que cayó el vuelo: `QUÉ VERGÜENZA` por
+  debajo de 800 (mediana del perfil de 200 ms), `ZAFA` hasta 22.900 (120 ms),
+  `BUEN REVOLEO` hasta 337.000 (60 ms), `TREMENDO` hasta 507.000 (impecable) e
+  `HISTÓRICO` por encima. Los umbrales viejos (1000/2500/5000/9000) eran de la
+  escala de tres tiros con multiplicadores.
 
 ## Pruebas
 

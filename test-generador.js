@@ -92,10 +92,13 @@ ck('el caso sin salida se ejercita de verdad', sinSalidaRaspon > 0 && yaAlcanzab
 
 // --- presupuesto de legibilidad ---
 // Se mide en el PEOR encuadre, no en el típico: la cámara se atrasa en proporción a la
-// velocidad, así que a VX_MAX es donde menos arco se ve por delante del palo. Medido a
-// velocidad media el presupuesto pasaba mientras el peor frame quedaba abajo del piso,
-// que es la misma forma de agujero que dejaba 4,5% de objetivos afuera en la Task 3.
-const ADEL_PEOR = M.adelante(M.F.ZOOM_VUELO, M.F.VX_MAX);
+// velocidad, así que a más velocidad es donde menos arco se ve por delante del palo.
+// Medido a velocidad media el presupuesto pasaba mientras el peor frame quedaba abajo del
+// piso, que es la misma forma de agujero que dejaba 4,5% de objetivos afuera en la Task 3.
+// El peor caso es F.VX_LANZ (10,63) y no F.VX_MAX (10): el lanzamiento es la única
+// velocidad del juego que pasa el clamp, y TODOS los avisos sub-piso medidos en vuelos
+// reales salen de ese instante. Medir en el clamp promete 182,4 px donde hay 178,6.
+const ADEL_PEOR = M.adelante(M.F.ZOOM_VUELO, M.F.VX_LANZ);
 const ADEL_QUIETO = M.adelante(M.F.ZOOM_VUELO, 0);
 // Se mide con las DOS fuerzas de rebote y se guarda la peor: el rebote bueno hace
 // arcos más cortos que el perfecto, así que avisa menos, y medir sólo el perfecto
@@ -175,7 +178,7 @@ ck('no quedó integración inline duplicada',
 // que mirar cuando se recalibra la velocidad o el zoom.
 console.log('presupuesto de legibilidad: aviso mínimo ' + Math.round(minAviso) + ' ms (piso ' +
   M.F.AVISO_MIN_MS + '), ' + cortos + ' objetivos por debajo del piso, sobre ' + medidos + ' medidos, con ' +
-  ADEL_PEOR.toFixed(1) + ' px de arco por delante del palo en el PEOR caso (a VX_MAX; ' +
+  ADEL_PEOR.toFixed(1) + ' px de arco por delante del palo en el PEOR caso (a VX_LANZ; ' +
   ADEL_QUIETO.toFixed(1) + ' px con el palo lento)');
 console.log(fail.length ? 'FALLAS:\n- ' + fail.join('\n- ') : 'TODO OK — generador y trayectoria');
 process.exit(fail.length ? 1 : 0);
