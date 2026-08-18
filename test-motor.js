@@ -127,6 +127,28 @@ ck('loop corriendo en play', !!c.raf);
 // intro guionada (el putt que se pasa de largo) + espera a que pase a ready
 ck('fase ready tras la intro', until(c, () => c.g.phase === 'ready'), c.g.phase);
 
+// «Ritmo del reintento» del spec: la intro se cuenta UNA vez por sesión y el reintento cae
+// directo en cargar el tiro. Se afirma sobre COMPORTAMIENTO y no sobre el flag: la intro es
+// lo único que deja la fase en 'intro' y lo único que crea g.ball, así que un reintento que
+// la repitiera se ve en las dos cosas. Y se mide sin avanzar el reloj: 'ready' en cero
+// frames es justamente lo que pide el requisito (los ~3,9 s de intro se pagan una vez).
+// Va en su PROPIO Component: `again()` resiembra el escenario, y sobre la instancia de
+// arriba le pisaría el vuelo determinista de abajo. Aparte, así el mutante cae acá y no
+// revienta el resto del archivo con un TypeError.
+// MUERDE: si el reintento vuelve a arrancar la intro, queda en fase 'intro' con pelota.
+{
+  const d0 = new Component();
+  d0.props = { censura: 'Sin filtro', sonido: false };
+  VT += 1e5; d0.componentDidMount(); d0.start();
+  // sin esto, "el reintento no repite la intro" pasaría en un juego que no la corre nunca
+  ck('la intro corre en el primer tiro de la sesión', d0.g.phase === 'intro', d0.g.phase);
+  until(d0, () => d0.g.phase === 'ready');
+  d0.again();
+  ck('el reintento no repite la intro: cae en ready sin gastar un frame',
+    d0.g.phase === 'ready', 'quedó en ' + d0.g.phase);
+  ck('y el reintento no deja la pelota de la intro', d0.g.ball === null, JSON.stringify(d0.g.ball));
+}
+
 // Escenario DETERMINISTA. newShot siembra con Math.random(), así que sin fijar la
 // semilla el vuelo de prueba es distinto en cada corrida: medido 2 de 20 veces el palo
 // se estrellaba contra un obstáculo que NO era el objetivo, buscarObjetivo devolvía
