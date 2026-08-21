@@ -12,16 +12,24 @@ const ck = (n, ok, x) => { if (!ok) fail.push(n + (x !== undefined ? ' :: ' + x 
 const est = { x: 500, y: M.F.GY - 46, vx: 4, vy: 6 };
 const perf = M.resolverRebote(est, 0);
 const bueno = M.resolverRebote(est, (M.F.VENTANA_PERFECTO + M.F.VENTANA_BUENO) / 2);
-const rasp = M.resolverRebote(est, M.F.VENTANA_BUENO + 50);
+const falla = M.resolverRebote(est, M.F.VENTANA_BUENO + 50);
 ck('centro de la ventana = perfecto', perf.tipo === 'perfecto', perf.tipo);
 ck('ventana media = bueno', bueno.tipo === 'bueno', bueno.tipo);
-ck('fuera de ventana = raspón', rasp.tipo === 'raspon', rasp.tipo);
+ck('fuera de ventana = fallado', falla.tipo === 'fallado', falla.tipo);
 ck('el signo del desfase no importa',
-  M.resolverRebote(est, -M.F.VENTANA_BUENO - 50).tipo === 'raspon');
+  M.resolverRebote(est, -M.F.VENTANA_BUENO - 50).tipo === 'fallado');
 ck('el perfecto devuelve más altura que el bueno', perf.vy < bueno.vy, perf.vy + ' ' + bueno.vy);
 ck('el perfecto sube', perf.vy < 0, perf.vy);
-ck('el raspón no sube y pierde velocidad',
-  rasp.vy >= 0 && rasp.vx < est.vx, rasp.vy + ' ' + rasp.vx);
+// El fallado no toca la física: ni altura, ni velocidad. ESTA es la aserción central del
+// rediseño — es lo que hace que errar un toque cueste un número en pantalla y nada más.
+// Antes acá vivía 'el raspón no sube y pierde velocidad', que fijaba lo contrario:
+// vy >= 0 y vx * 0.65. Medido en su momento, esa multiplicación encadenada llevaba la vx
+// a 0,36, el arco entero avanzaba 41 px y ninguna cima quedaba al alcance: el vuelo se
+// moría tres rebotes después de un error que el jugador no había visto.
+// MUERDE: devolverle al fallado cualquier castigo físico (aunque sea vx * 0.99) rompe
+// esto, y con él vuelve la espiral invisible.
+ck('el fallado no le toca la física al palo',
+  falla.vy === est.vy && falla.vx === est.vx, falla.vy + ' ' + falla.vx);
 ck('el perfecto empuja horizontalmente', perf.vx > est.vx, perf.vx);
 // El rebote perfecto tiene que devolver la MISMA altura sin importar con qué
 // velocidad venía. Si decayera con la entrante, una cadena de rebotes perfectos
@@ -31,32 +39,53 @@ const lento  = M.resolverRebote({ x: 500, y: 186, vx: 3,  vy: 2 }, 0);
 const rapido = M.resolverRebote({ x: 500, y: 186, vx: 10, vy: 9 }, 0);
 ck('el impulso perfecto no decae con la velocidad entrante',
   lento.vy === rapido.vy, lento.vy + ' vs ' + rapido.vy);
-// Al revés que el perfecto, el raspón SÍ tiene que depender de la entrante
-// (pierde una fracción de lo que traía, no cae a un piso fijo). Dos entrantes
-// distintas tienen que dar salidas distintas.
-const raspLento  = M.resolverRebote({ x: 500, y: 186, vx: 3,  vy: 2 }, M.F.VENTANA_BUENO + 50);
-const raspRapido = M.resolverRebote({ x: 500, y: 186, vx: 10, vy: 9 }, M.F.VENTANA_BUENO + 50);
-ck('el raspón es proporcional a la velocidad entrante, no un piso fijo',
-  raspLento.vy !== raspRapido.vy && raspLento.vx !== raspRapido.vx,
-  raspLento.vy + '/' + raspLento.vx + ' vs ' + raspRapido.vy + '/' + raspRapido.vx);
-// ...pero con un PISO, porque sin drag nada más frena el palo y una cadena de raspones
-// multiplicaba 0,65 hasta el arco inservible (los 4 huecos clavados de más abajo eran
-// palos con vx 0,36..0,39). El piso lo pone el REBOTE, no el vuelo: paso() no puede
-// tenerlo porque el palo rodando en el suelo termina el vuelo justo cuando |vx| < 0,12.
-// Se aplica a los tres desenlaces, no sólo al raspón: el choque del vuelo hace
-// c.vx *= .22 por fuera del resolutor, y con el piso sólo en el raspón un choque volvía
-// a fabricar la misma clase de palo muerto que un 'bueno' después mantiene tal cual.
-// MUERDE: sacando el piso del resolutor, el raspón desde 0,2 sale en 0,13.
-for (const desf of [0, (M.F.VENTANA_PERFECTO + M.F.VENTANA_BUENO) / 2, M.F.VENTANA_BUENO + 50])
-  ck('ningún rebote deja el palo abajo del piso de vx (desfase ' + desf + ')',
-    M.resolverRebote({ x: 500, y: 186, vx: 0.2, vy: 2 }, desf).vx === M.F.PISO_VX,
-    M.resolverRebote({ x: 500, y: 186, vx: 0.2, vy: 2 }, desf).vx);
-// El piso no puede subir tanto que se coma la proporcionalidad del raspón en las
-// velocidades que el juego visita de verdad: la aserción de arriba corre con vx 3, así
-// que 3*0.65 = 1,95 tiene que seguir estando por encima del piso. Se deja explícito
-// porque es la cota SUPERIOR del piso y es fácil de romper subiéndolo "un poquito".
-ck('el piso de vx deja lugar al castigo del raspón', M.F.PISO_VX < 3 * 0.65,
-  'piso ' + M.F.PISO_VX);
+// Y el fallado devuelve el estado TAL CUAL con cualquier entrante, no un piso fijo: es
+// la identidad, no una fórmula suave. Se prueba con dos entrantes muy distintas para que
+// no pueda pasar por casualidad.
+const fLento  = { x: 500, y: 186, vx: 3,  vy: 2 };
+const fRapido = { x: 500, y: 186, vx: 10, vy: 9 };
+ck('el fallado es la identidad para cualquier entrante',
+  ['vx','vy'].every(k => M.resolverRebote(fLento, 400)[k] === fLento[k]
+                      && M.resolverRebote(fRapido, 400)[k] === fRapido[k]));
+// El PISO de vx lo hace cumplir la salida del rebote: toda PEGADA deja al palo con arco
+// suficiente para alcanzar alguna cima. El fallado no puede clampear nada —es la
+// identidad— y no hace falta que lo haga, porque no le toca la velocidad a nadie.
+// MUERDE: sacando el acotar de la salida de resolverRebote, una pegada desde 0,2 sale en
+// 0,2 y el arco entero avanza 41 px, tan poco que ninguna cima le queda al alcance (los 4
+// huecos clavados que este archivo tenía documentados eran esa clase de palo).
+ck('toda pegada deja al palo arriba del piso de vx',
+  [0, (M.F.VENTANA_PERFECTO + M.F.VENTANA_BUENO) / 2]
+    .every(d => M.resolverRebote({ x: 0, y: 186, vx: 0.2, vy: 2 }, d).vx >= M.F.PISO_VX));
+// Y el decaimiento sólo BAJA: no puede levantarle la velocidad a un palo que ya viene
+// abajo del piso. Parece un detalle y es el final del vuelo: el palo rodando en el pasto
+// termina cuando |vx| < 0,12, así que un piso aplicado en la integración vuelve ese final
+// INALCANZABLE y todos los vuelos se van al timeout de 3.600 pasos rodando.
+// MUERDE: con `decaer = Math.max(PISO_VX, vx*(1-DECAY))` esto se pone rojo, y fue el bug
+// de verdad — se escribió así primero.
+ck('el decaimiento no le levanta la velocidad al palo que ya frenó',
+  M.decaer(0.2) <= 0.2 && M.paso({ x: 0, y: M.F.GY, vx: 0.05, vy: 0 }).vx <= 0.05,
+  M.decaer(0.2) + ' / ' + M.paso({ x: 0, y: M.F.GY, vx: 0.05, vy: 0 }).vx);
+// El piso es la cota inferior; la SUPERIOR es que el decaimiento tenga rango donde
+// trabajar. Si el piso subiera cerca del techo, la velocidad dejaría de ser un recurso:
+// decaer no se notaría y la pegada no devolvería nada. Se pide al menos un factor 2, que
+// son los ~5 arcos fallados que separan el techo del piso (0,75 por arco).
+ck('el piso deja rango para que el decaimiento signifique algo',
+  M.F.PISO_VX <= M.F.VX_MAX / 2, 'piso ' + M.F.PISO_VX + ' techo ' + M.F.VX_MAX);
+
+// --- presupuesto de toques ---
+// El toque cuesta 1 y la pegada devuelve 3: la barra es "acertar uno de cada tres". Si el
+// costo y la recarga se acercaran, el presupuesto dejaría de dar margen para buscar la
+// ventana a tientas y errar volvería a ser fatal.
+ck('la pegada devuelve más de lo que cuesta un toque', M.F.TOQUES_PEGADA >= 3);
+ck('la pegada recarga y el fallado no',
+  M.toquesTras(3, 'perfecto') === 6 && M.toquesTras(3, 'bueno') === 6
+  && M.toquesTras(3, 'fallado') === 3);
+// El tope existe para que el presupuesto no se vuelva irrelevante: sin él una cadena
+// larga junta decenas de toques y de ahí en adelante se puede tocar al azar todo el vuelo.
+// MUERDE: sacar el Math.min de Motor.toquesTras deja esto en 12.
+ck('el presupuesto tiene tope', M.toquesTras(M.F.TOQUES_MAX, 'perfecto') === M.F.TOQUES_MAX);
+ck('el tope deja al menos tres objetivos de colchón',
+  M.F.TOQUES_MAX >= 3 * M.F.TOQUES_PEGADA - M.F.TOQUES_PEGADA, 'tope ' + M.F.TOQUES_MAX);
 
 // El arco del rebote perfecto tiene que quedar ABAJO del techo. Si lo clava, el
 // excedente se descarta, todos los arcos de la cadena salen idénticos y la altura
@@ -189,7 +218,18 @@ const TOPE = 40000;   // pasos de lógica: dónde se corta el vuelo del bot
 // física —`ultimosTipos` sólo entra en el factor de variedad— así que con la misma
 // semilla y el mismo error el vuelo es EL MISMO arco y la única diferencia posible en el
 // score es la regla de variedad.
-function vuelo(errorMs, semilla, tope, monotono) {
+// `reintentoMs` es el MODELO DE JUGADOR, y hay que poder cambiarlo porque el presupuesto
+// de toques existe justamente para distinguir dos maneras de jugar:
+//  - 250 ms (el que mide la curva): toca, y si ve '¡AL AIRE!' vuelve a tocar después de un
+//    tiempo de reacción humano, mientras el objetivo siga vivo y le queden toques. Es el
+//    jugador de verdad. Un toque errado no le cambia la física, así que el objetivo sigue
+//    ahí y puede insistir; lo que gasta es presupuesto.
+//  - 0 (el que aporrea): toca en CADA frame. Antes del presupuesto ésta era la estrategia
+//    dominante Y GRATIS —tocar no costaba nada— y es la que el presupuesto tiene que
+//    castigar. Medido a 260 ms de error: se queda sin toques 148 veces y saca 588 puntos
+//    contra 7.782 del que se compromete, o sea 13× peor.
+function vuelo(errorMs, semilla, tope, monotono, reintentoMs) {
+  const RE = reintentoMs === undefined ? 250 : reintentoMs;
   const { C, adv, now } = arnes();
   const c = new C();
   c.props = { censura: 'Sin filtro', sonido: false };
@@ -221,7 +261,14 @@ function vuelo(errorMs, semilla, tope, monotono) {
     const r = origRebote(d); vxRebote = Math.max(vxRebote, Math.abs(c.g.club.vx)); return r; };
   const msPaso = M.F.STEP / M.F.VUELO;          // ms de reloj por paso de física
   const pulso = M.lcg(semilla ^ 0x5bf03635);    // el pulso del bot, aparte del escenario
-  let pasos = 0, objAnt = null, pasoAnt = null, kToque = 0;
+  let pasos = 0, objAnt = null, pasoAnt = null, kToque = 0, ultimoToque = -Infinity;
+  // Cuántas veces el bot quiso tocar sin toques en el presupuesto, hasta dónde bajó, y
+  // cuántos toques erró sin morirse: son las tres medidas de si el presupuesto aprieta.
+  let sinToques = 0, minToques = M.F.TOQUES_MAX, fallados = 0;
+  const origFallo = c.aplicarRebote.bind(c);
+  c.aplicarRebote = d => {
+    if (Math.abs(d) > M.F.VENTANA_BUENO) fallados++;
+    return origFallo(d); };
   while (pasos < (tope || TOPE) && (c.g.phase === 'fly' || c.g.phase === 'swing')) {
     adv(M.F.STEP); c.tick(now()); pasos++;
     const g = c.g;
@@ -231,9 +278,14 @@ function vuelo(errorMs, semilla, tope, monotono) {
       if (g.objetivo !== objAnt || g.pasoObjetivo !== pasoAnt) {
         objAnt = g.objetivo; pasoAnt = g.pasoObjetivo;
         kToque = Math.round(-(pulso() * 2 - 1) * errorMs / msPaso);
+        ultimoToque = -Infinity;
       }
-      if (g.pasoObjetivo - (g.pasosVuelo || 0) <= kToque) {
+      const listo = g.pasoObjetivo - (g.pasosVuelo || 0) <= kToque;
+      if (listo && (pasos - ultimoToque) * M.F.STEP >= RE) {
+        ultimoToque = pasos;
         if (monotono) g.ultimosTipos = [g.objetivo.t, g.objetivo.t, g.objetivo.t, g.objetivo.t];
+        if (g.toques <= 0) sinToques++;
+        minToques = Math.min(minToques, g.toques);
         c.tocar();
       }
     }
@@ -243,7 +295,8 @@ function vuelo(errorMs, semilla, tope, monotono) {
   // pasarían midiendo un juego roto.
   if (global.window.__loopErr) throw new Error('el loop explotó: ' + global.window.__loopErr);
   return { pts: c.g.puntos, pasos: pasos, combo: c.g.combo, vxRebote: vxRebote,
-           huecos: huecos - huecos0 };
+           huecos: huecos - huecos0, sinToques: sinToques, minToques: minToques,
+           fallados: fallados };
 }
 
 // Huecos del generador, contados sobre los vuelos que ya se corren. Es LA garantía
@@ -284,13 +337,35 @@ function vuelo(errorMs, semilla, tope, monotono) {
 const cubreElAvance = est => M.trayectoria(est, 1200)
   .some(p => p.vy > 0 && p.x - est.x >= M.AVANCE_MIN);
 
-let huecos = 0, huecosPique = 0, huecosCortos = 0, vxHueco = Infinity;
+// SEGUNDA exclusión geométrica, y con nombre propio: el arco llega a AVANCE_MIN pero
+// recién ABAJO de la cima más baja que la cancha puede tener, o sea en la franja donde no
+// se puede plantar nada por definición.
+// Es el caso que el comentario de arriba anticipaba como "más correcto en unidades" y
+// descartaba por miedo a quedar ciega. No queda ciega porque NO reemplaza a cubreElAvance:
+// las dos se cuentan por separado, así que un AVANCE_MIN absurdo (el escenario que ese
+// miedo describía) sigue apareciendo como un pico en los contadores en vez de en silencio.
+// Medido: explica exactamente los 8 huecos que quedaban con el bot de 200 ms, todos con el
+// palo en y≈202 —la cima del caddie y del SDGA— bajando a vy≈2,7. Desde ahí quedan 30 px
+// hasta el pasto y la única cima que falta es la del carrito (212): el palo la cruza 15 px
+// más adelante, cuando la barra de legibilidad pide 40. No hay dónde poner nada, y que el
+// vuelo se termine ahí es el palo demasiado bajo, no un hueco del generador.
+const CIMA_MAS_BAJA = Math.max(...M.CLAVES.reduce((a, k) => a.concat(M.cimasDe(k)), []));
+const bajoLaBanda = est => !M.trayectoria(est, 1200)
+  .some(p => p.vy > 0 && p.x - est.x >= M.AVANCE_MIN && p.y <= CIMA_MAS_BAJA);
+
+let huecos = 0, huecosPique = 0, huecosCortos = 0, huecosBajos = 0, vxHueco = Infinity;
 const rellenarReal = M.rellenar;
 M.rellenar = (obs, rand, est) => {
   const r = rellenarReal(obs, rand, est);
-  if (r === 'sin-salida' && est.vy < 0) {
+  // El filtro `est.vy < 0` se fue con el raspón. El contrato de rellenar ya no depende
+  // del signo de vy —un palo que viene bajando después de un toque errado es el estado
+  // normal del que se equivocó, y negarle objetivo ahí lo mata por el error que el
+  // presupuesto de toques existe para perdonar— así que ahora se cuenta TODO 'sin-salida'
+  // y lo único que lo excusa es la geometría: que el arco no llegue a AVANCE_MIN.
+  if (r === 'sin-salida') {
     if (est.y >= M.F.GY - 1) huecosPique++;
     else if (!cubreElAvance(est)) huecosCortos++;
+    else if (bajoLaBanda(est)) huecosBajos++;
     else { huecos++; vxHueco = Math.min(vxHueco, Math.abs(est.vx)); }
   }
   return r;
@@ -310,12 +385,47 @@ const corridas = perfiles.map(e => Array.from({ length: 25 }, (_, i) => vuelo(e,
 // más abajo siguen sumando los 40 vuelos del ruido, el impecable y el cuarto de vuelo.
 // Sin este corte el desglose que se imprime mezclaba dos poblaciones: los huecos de los
 // 100 vuelos de `corridas` contra los excluidos de 143 vuelos.
-const cortos100 = huecosCortos, pique100 = huecosPique;
+const cortos100 = huecosCortos, pique100 = huecosPique, bajos100 = huecosBajos;
 const medianas = corridas.map(rs => mediana(rs.map(r => r.pts)));
 
 ck('la destreza es monótona: menos error ⇒ más puntos',
   medianas.every((v, i) => i === 0 || v >= medianas[i-1]),
   perfiles.map((e,i)=>e+'ms='+medianas[i]).join('  '));
+
+// --- el presupuesto de toques tiene que APRETAR, no decorar ---
+// Ésta es la promesa central del rediseño y hay que medirla en vuelos de verdad, porque
+// la primera versión pasaba todas las aserciones unitarias y en el juego el presupuesto
+// era decoración: el palo erraba UN toque, caía abajo de la cima más baja de la cancha y
+// el vuelo se terminaba con 8 toques sin gastar. Lo que lo arregló fue geométrico (el
+// pasto como plataforma de último recurso), no económico, así que la aserción que hace
+// falta es sobre el vuelo entero y no sobre resolverRebote.
+// MUERDE: sacando el pasto de rellenar, la mediana de errados a 200 ms cae a 1 (el vuelo
+// se muere en el primer toque errado) y esto se pone rojo.
+const torpes = corridas[0];   // el perfil de 200 ms, el único que erra de verdad
+ck('errar un toque no termina el vuelo',
+  mediana(torpes.map(r => r.fallados)) >= 3,
+  'errados por vuelo a 200 ms: ' + torpes.map(r => r.fallados).join(','));
+
+// Y del otro lado: aporrear la pantalla tiene que salir PEOR que comprometerse. Antes del
+// presupuesto, tocar era gratis y aporrear era la estrategia dominante; el costo de 1 por
+// toque es lo único que lo castiga. Se mide con 260 ms de error, que es donde el que
+// aporrea gasta de verdad (a 200 ms casi no erra y las dos maneras empatan).
+const ERR_APORREA = 260;
+const comprometidos = Array.from({ length: 9 }, (_, i) => vuelo(ERR_APORREA, 1000 + i * 37));
+const aporreadores = Array.from({ length: 9 }, (_, i) => vuelo(ERR_APORREA, 1000 + i * 37, 0, false, 0));
+const medCompr = mediana(comprometidos.map(r => r.pts));
+const medApor = mediana(aporreadores.map(r => r.pts));
+ck('al que aporrea la pantalla el presupuesto lo deja sin toques',
+  mediana(aporreadores.map(r => r.sinToques)) > 20,
+  'toques negados: ' + mediana(aporreadores.map(r => r.sinToques)));
+ck('aporrear rinde menos que comprometerse', medApor * 2 < medCompr,
+  'aporreando ' + medApor + ' contra ' + medCompr + ' comprometido');
+// ...y al que se compromete, el presupuesto NO lo aprieta: es red de seguridad, no
+// impuesto. Si esto se pusiera rojo, el juego estaría cobrándole el error a quien juega
+// bien, que es de dónde venimos.
+ck('al que se compromete el presupuesto no lo estrangula',
+  mediana(corridas[2].map(r => r.sinToques)) === 0,
+  'toques negados a 60 ms: ' + mediana(corridas[2].map(r => r.sinToques)));
 
 // Se mide sobre los CUATRO perfiles y no sólo sobre el impecable: el hueco aparece
 // después de un rebote bueno, que es un rebote exitoso y no un error, y el bot con
@@ -375,7 +485,8 @@ ck('el generador no deja ningún hueco (los 4 conocidos se fueron con el drag)',
   perfiles.map((e,i)=>e+'ms='+HUECOS_CONOCIDOS[i]).join('  ') +
   ' (el vx más bajo fue ' + (vxHueco === Infinity ? 'n/d' : vxHueco.toFixed(2)) +
   '); de los mismos 100 vuelos no cuentan ' + cortos100 + ' cuyo arco no cubre ' +
-  'AVANCE_MIN (' + M.AVANCE_MIN + ' px) ni ' + pique100 + ' tras un pique en el suelo');
+  'AVANCE_MIN (' + M.AVANCE_MIN + ' px), ' + bajos100 + ' que sólo lo cubren abajo de la ' +
+  'cima más baja (' + CIMA_MAS_BAJA + ') ni ' + pique100 + ' tras un pique en el suelo');
 
 // El ruido es la varianza del score con la MISMA entrada (error 0, sin jitter) y
 // distinto escenario: es lo que el jugador no controla. La señal es lo que separa
@@ -466,6 +577,7 @@ console.log('destreza: ' + perfiles.map((e,i)=>e+'ms=' + medianas[i]).join('  ')
   '; 4× el largo paga ' + (perfecto.pts / Math.max(1, cuarto)).toFixed(2) + '×' +
   '\n          huecos del generador en los 100 vuelos con error: ' +
   huecosPerfil.reduce((a,b)=>a+b,0) + ' (fuera del contrato, mismos 100 vuelos: ' +
-  cortos100 + ' con el arco más corto que AVANCE_MIN, ' + pique100 + ' tras un pique)');
+  cortos100 + ' con el arco más corto que AVANCE_MIN, ' + bajos100 +
+  ' abajo de la cima más baja, ' + pique100 + ' tras un pique)');
 console.log(fail.length ? 'FALLAS:\n- ' + fail.join('\n- ') : 'TODO OK — rebote, combo, puntaje, variedad y destreza');
 process.exit(fail.length ? 1 : 0);

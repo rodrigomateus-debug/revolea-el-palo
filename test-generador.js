@@ -20,22 +20,49 @@ ck('metros() cuenta desde el tee',
 // Era el bug de diseño que motivó esta task — el drag de `paso` comía 0,4% de vx por
 // paso de física (~21% por segundo) y el rebote 'bueno', que no compensa nada, era una
 // muerte lenta: el jugador encadenaba toques correctos y el palo se apagaba igual.
-// Ahora la velocidad es la historia de los toques y de nada más.
-// MUERDE: volver a multiplicar vx por el drag en Motor.paso (aunque sea el mínimo de
-// 0,0008) hace que el último paso salga con vx < 8 y esto cae.
-// La vx de prueba tiene que estar ABAJO del techo, si no `acotar` la baja y esto mide el
-// clamp en vez del drag: con VX_MAX en 6 un 8 salía 6 y la aserción fallaba por el motivo
-// equivocado. Se deriva del techo para que no se vuelva a desincronizar.
+// La velocidad decae, y el decaimiento vive DENTRO de Motor.paso. Esta aserción existe
+// por eso último y no por el número: trayectoria() consume el mismo paso, así que si el
+// decaimiento estuviera en el bucle del vuelo el arco fantasma y el paso de llegada del
+// anillo apuntarían a un futuro que el palo no va a recorrer. Es la misma clase de
+// divergencia que ya obligó a extraer cruzaCima.
+// MUERDE: mover el decaimiento al componente (sacarlo de Motor.paso) deja todos los
+// pasos con la misma vx y esto cae.
+// La vx de prueba está abajo del techo, si no `acotar` la baja y esto mediría el clamp.
 const VX_PRUEBA = M.F.VX_MAX - 1;
 const tPlano = M.trayectoria({ x: 100, y: 100, vx: VX_PRUEBA, vy: -6 }, 400);
-ck('el vuelo no le come velocidad horizontal al palo',
-  tPlano.every(p => p.vx === VX_PRUEBA), 'vx al final del arco: ' + tPlano[tPlano.length - 1].vx);
-// Y que el techo siga siendo techo: sin el drag, `acotar` es lo ÚNICO que frena la vx
-// de salida del lanzamiento (VX_LANZ = 10,63 pasa por arriba de VX_MAX).
+ck('el vuelo le va comiendo velocidad al palo, paso por paso',
+  tPlano.every((p, i) => i === 0 || p.vx < tPlano[i - 1].vx),
+  'vx: ' + VX_PRUEBA + ' -> ' + tPlano[tPlano.length - 1].vx);
+// Y decae EXACTAMENTE lo que dice F.DECAY_VX, ni un multiplicador escondido de más: la
+// constante está justificada por un objetivo medible (~25% por arco) y si el paso
+// aplicara otra cosa esa justificación sería falsa.
+ck('el decaimiento del paso es el de F.DECAY_VX',
+  Math.abs(M.paso({ x: 0, y: 100, vx: VX_PRUEBA, vy: -6 }).vx
+           - VX_PRUEBA * (1 - M.F.DECAY_VX)) < 1e-12);
+// El piso corta el decaimiento: abajo de PISO_VX el arco entero avanza tan poco que
+// ninguna cima queda al alcance (ver la aserción del piso, más abajo).
+// MUERDE: sacar el Math.max de Motor.decaer deja la vx cayendo a cero sin fondo.
+const tLento = M.trayectoria({ x: 0, y: 60, vx: M.F.PISO_VX, vy: -6 }, 400);
+ck('el decaimiento nunca baja del piso de vx',
+  tLento.every(p => p.vx >= M.F.PISO_VX - 1e-12),
+  'mínima ' + Math.min(...tLento.map(p => p.vx)));
+// Y que el techo siga siendo techo: `acotar` es lo que frena la vx de salida del
+// lanzamiento (VX_LANZ = 10,63 pasa por arriba de VX_MAX). Se compara contra el techo YA
+// decaído porque el mismo paso hace las dos cosas, en ese orden.
 // MUERDE: sacar el acotar de Motor.paso deja el primer paso a VX_LANZ.
 ck('el techo de vx sigue rigiendo en el vuelo',
-  M.paso({ x: 0, y: 100, vx: M.F.VX_LANZ, vy: -6 }).vx === M.F.VX_MAX,
+  M.paso({ x: 0, y: 100, vx: M.F.VX_LANZ, vy: -6 }).vx === M.decaer(M.F.VX_MAX),
   M.paso({ x: 0, y: 100, vx: M.F.VX_LANZ, vy: -6 }).vx);
+// La contracara: la pegada DEVUELVE la velocidad. Sin esto el decaimiento sería el
+// impuesto inevitable que se sacó en e9d8357 y no un recurso.
+// MUERDE: hacer que el perfecto multiplique vx en vez de resetearla deja al palo lento
+// sin forma de recuperarse y esto cae.
+ck('la pegada perfecta resetea la velocidad al techo',
+  M.resolverRebote({ x: 0, y: 186, vx: M.F.PISO_VX, vy: 2 }, 0).vx === M.F.VX_MAX);
+ck('el fallado no le toca la velocidad ni la altura al palo',
+  (() => { const e = { x: 0, y: 186, vx: 3.3, vy: 1.7 };
+           const r = M.resolverRebote(e, M.F.VENTANA_BUENO + 50);
+           return r.vx === e.vx && r.vy === e.vy; })());
 
 // El piso de vx tiene que dejar un arco USABLE, y no sólo ser un número mayor que cero:
 // desde un rebote bueno, el tramo que baja del arco tiene que cruzar la cima de algún
@@ -52,7 +79,10 @@ ck('el techo de vx sigue rigiendo en el vuelo',
 // prohíbe la clase de los 4 huecos viejos; que el piso sea 1,2 y no 0,4 es margen (124,8
 // px, 3× la barra) y no algo que esta aserción pueda defender. La cota SUPERIOR del piso
 // la pone la aserción del castigo del raspón, en test-destreza.js.
-const cimas = Object.keys(M.TIPOS).map(k => M.F.GY - M.TIPOS[k].h);
+// Las cimas se le PREGUNTAN al motor. Escritas acá como GY - h daban 220 y 226 para los
+// tipos que flotan, o sea cimas por debajo del pasto: la aserción del piso se habría
+// medido contra alturas que no existen en la cancha.
+const cimas = M.CLAVES.reduce((a, k) => a.concat(M.cimasDe(k)), []);
 const lejanoDesde = y => {
   const vy = M.resolverRebote({ x: 0, y: y, vx: M.F.PISO_VX, vy: 2 },
     (M.F.VENTANA_PERFECTO + M.F.VENTANA_BUENO) / 2).vy;
@@ -77,7 +107,23 @@ const obs = M.generar(rand, 400, 6000);
 ck('genera obstáculos', obs.length > 8, obs.length);
 ck('vienen ordenados por x', obs.every((o, i) => i === 0 || obs[i-1].x <= o.x));
 ck('todos tienen tipo conocido', obs.every(o => M.TIPOS[o.t]));
-ck('la cima es el techo del obstáculo', obs.every(o => o.cima === M.F.GY - o.h));
+// La forma del obstáculo es {t, x, w, alto, cima} para TODOS: el que flota y el que está
+// apoyado. Antes esto decía `o.cima === GY - o.h`, que es la cuenta que da por sentado
+// que todo está parado en el pasto — justamente lo que los tipos de aire rompen.
+ck('la caja del obstáculo se describe con cima y alto',
+  obs.every(o => o.cima != null && o.alto > 0 && o.h === undefined));
+ck('los apoyados llegan al pasto y los de aire no',
+  obs.every(o => M.TIPOS[o.t].aire
+    ? o.cima + o.alto < M.F.GY : o.cima + o.alto === M.F.GY));
+ck('ninguna cima se va del mundo',
+  obs.every(o => o.cima >= M.F.TECHO && o.cima < M.F.GY));
+// El aporte de los de aire es la BANDA de alturas: con sólo los apoyados las cimas
+// caben en 26 px (186..212) mientras el arco llega a y=50, así que nueve décimos de la
+// pantalla no decidían nada. MUERDE: sacarle el `aire` a dron y cable deja la banda en 26.
+const banda = M.CLAVES.reduce((a, k) => a.concat(M.cimasDe(k)), []);
+ck('las cimas cubren una banda de altura que el arco puede usar',
+  Math.max(...banda) - Math.min(...banda) >= 70,
+  'banda ' + Math.min(...banda) + '..' + Math.max(...banda));
 ck('el lcg es determinista',
   JSON.stringify(M.generar(M.lcg(12345), 400, 6000)) === JSON.stringify(obs));
 
@@ -131,43 +177,56 @@ for (const vyRebote of [VY_PERFECTO, VY_BUENO]) {
     sinSalida + ' de ' + probados + ' estados sin objetivo alcanzable');
 }
 
-// --- caso excluido a propósito: un raspón (vy >= 0, ya bajando cerca del
-// piso) no recibe regalo de rellenar. Puede legítimamente terminar el vuelo
-// sin salida — eso no es un bug del generador, es el error del jugador. Se
-// corre sobre 300 semillas (mismo estilo que la cadena de solvencia) para
-// que las ramas ocurran de verdad, y se valida el string que devuelve
-// rellenar contra lo que después ve alcanzables.
-// La vy del raspón se le PREGUNTA al resolutor, igual que las dos fuerzas de rebote de
-// arriba, y se le pide el raspón más suave que sabe dar (el que cae en el piso de
-// Math.max, o sea el palo que venía apenas bajando). Estaba escrita a mano en 2, y cuando
-// el techo bajó a 6 el arco de ese estado dejó de llegar al primer obstáculo de la cancha
-// (que arranca 100 px adelante): daba 300 de 300 'sin-salida', o sea que la rama
-// 'ya-habia' no se ejercitaba más y la aserción de abajo quedaba a medias midiendo un
-// solo camino. Con el raspón del resolutor sale 150 y 150.
-const VY_RASPON = M.resolverRebote({ x: 0, y: M.F.GY - 46, vx: VX_CADENA, vy: 0 },
-  M.F.VENTANA_BUENO + 50).vy;
-let planto = 0, sinSalidaRaspon = 0, yaAlcanzable = 0;
-for (let s = 1; s <= 300; s++) {
-  const r = M.lcg(s);
-  const esc = M.generar(r, 400, 20000);
-  const est = { x: 300, y: M.F.GY - 46, vx: VX_CADENA, vy: VY_RASPON };
-  const resultado = M.rellenar(esc, r, est);
-  const alc = M.alcanzables(esc, est);
-  // la invariante es "desde un rebote que recuperó altura" (vy < 0): un
-  // raspón (vy >= 0) nunca puede terminar en 'planto'
-  ck('no se le regala salida a un raspón', resultado !== 'planto', resultado);
-  if (resultado === 'sin-salida') {
-    ck('sin-salida ⇒ alcanzables vacío', alc.length === 0, alc.length);
-    sinSalidaRaspon++;
-  } else if (resultado === 'ya-habia') {
-    ck('ya-habia ⇒ alcanzables no vacío', alc.length > 0, alc.length);
-    yaAlcanzable++;
-  } else {
-    planto++;
+// --- LA garantía de "errar un toque no te mata" ---
+// Antes acá vivía el caso contrario: a un palo que ya venía bajando (vy >= 0) NO se le
+// regalaba salida, porque en el diseño viejo eso era el raspón y el raspón ERA el castigo
+// por errar. Ese caso se dio vuelta con el rediseño y por eso las aserciones también.
+// Ahora la promesa es al revés y es la más fuerte del generador: desde CUALQUIER estado
+// cuyo arco todavía llegue al suelo más adelante, siempre hay a dónde ir. El palo que
+// viene bajando después de un toque errado es el estado normal del que se equivocó, y
+// negarle objetivo ahí es matarlo por el error que el presupuesto de toques existe para
+// perdonar.
+// Lo que la cumple es el pasto como plataforma de último recurso (ver Motor.rellenar).
+// MUERDE, y fue medido: sacando el pasto, este barrido da 198 'sin-salida' de 300 y en
+// vuelos de verdad la mediana de toques errados a 200 ms cae a 1 — o sea que el primer
+// error termina el vuelo, con el presupuesto entero sin gastar.
+// Se corren los DOS regímenes: el palo que viene bajando (vy > 0, el que erró) y el que
+// acaba de rebotar (vy < 0). El de abajo es el que importa y el que antes fallaba.
+let planto = 0, sinSalida2 = 0, yaAlcanzable = 0;
+for (const vy of [0.5, 2.5, -M.IMPULSO]) {
+  for (let s = 1; s <= 100; s++) {
+    const r = M.lcg(s);
+    const esc = M.generar(r, 400, 20000);
+    const est = { x: 300, y: M.F.GY - 46, vx: VX_CADENA, vy: vy };
+    const resultado = M.rellenar(esc, r, est);
+    const alc = M.alcanzables(esc, est);
+    if (resultado === 'sin-salida') {
+      ck('sin-salida ⇒ alcanzables vacío', alc.length === 0, alc.length);
+      sinSalida2++;
+    } else if (resultado === 'ya-habia') {
+      ck('ya-habia ⇒ alcanzables no vacío', alc.length > 0, alc.length);
+      yaAlcanzable++;
+    } else {
+      // plantó: y lo que plantó tiene que quedar de verdad alcanzable, si no la
+      // invariante se cumple de palabra y no de hecho.
+      ck('planto ⇒ ahora hay algo alcanzable',
+        M.alcanzables(esc, est).length > 0);
+      planto++;
+    }
   }
 }
-ck('el caso sin salida se ejercita de verdad', sinSalidaRaspon > 0 && yaAlcanzable > 0,
-  'planto=' + planto + ' sin-salida=' + sinSalidaRaspon + ' ya-habia=' + yaAlcanzable);
+ck('nunca se deja sin salida a un palo cuyo arco todavía llega al suelo',
+  sinSalida2 === 0,
+  'planto=' + planto + ' sin-salida=' + sinSalida2 + ' ya-habia=' + yaAlcanzable);
+// Y las dos ramas se ejercitan de verdad: si una quedara en cero, la aserción de arriba
+// estaría midiendo un solo camino.
+ck('las dos ramas de rellenar se ejercitan', planto > 0 && yaAlcanzable > 0,
+  'planto=' + planto + ' ya-habia=' + yaAlcanzable);
+
+// El único 'sin-salida' que queda es el palo que ya no avanza: parado sobre el pasto no
+// hay nada más adelante donde plantar, y ahí el vuelo se termina de verdad.
+ck('un palo que ya no avanza sí se queda sin salida',
+  M.rellenar([], M.lcg(1), { x: 300, y: M.F.GY, vx: 0, vy: 0 }) === 'sin-salida');
 
 // --- el rebote tiene que poder DESPEGAR del par más apretado de la cancha ---
 // El par más apretado que `generar` puede armar es el peor: un cart (cima 212) y, a
