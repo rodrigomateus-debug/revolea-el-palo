@@ -23,6 +23,7 @@ node test-motor.js "Revolea el Palo.dc.html"
 node test-db.js "Revolea el Palo.dc.html"
 node test-generador.js
 node test-destreza.js
+node test-encuadre.js            # encuadre en un navegador real; se saltea sin playwright
 ```
 
 ## Ramas

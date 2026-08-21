@@ -38,7 +38,16 @@ const HTML = `<!DOCTYPE html>
 <script src="motor.js"></script>
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Anton&family=Archivo:wght@400;600;700&display=swap">
 <style>
-:root{--font-display:Anton,Impact,sans-serif;--font-body:Archivo,system-ui,sans-serif;--s:1}
+:root{--font-display:Anton,Impact,sans-serif;--font-body:Archivo,system-ui,sans-serif;--s:1;
+  /* Los insets del sistema, en px de PANTALLA. Se leen UNA vez acá para que el layout
+     no repita env() en cada regla (y para que un test los pueda pisar). */
+  --sa-top:env(safe-area-inset-top,0px);--sa-bottom:env(safe-area-inset-bottom,0px);
+  --sa-left:env(safe-area-inset-left,0px);--sa-right:env(safe-area-inset-right,0px);
+  /* Los MISMOS insets en px de ESCENARIO, que es la unidad de todo el layout de
+     adentro: el escenario se dibuja escalado por --s, así que un inset de 59 px de
+     pantalla mide 59/--s adentro. Sin dividir, el margen que se reserva arriba queda
+     más grande que la franja que tapa. */
+  --isat:calc(var(--sa-top) / var(--s));--isab:calc(var(--sa-bottom) / var(--s))}
 *{box-sizing:border-box}
 html,body{margin:0;height:100%;background:#0C2B1C;overscroll-behavior:none;
   -webkit-text-size-adjust:100%;text-size-adjust:100%}
@@ -47,17 +56,35 @@ body{font-family:var(--font-body);color:#F4EEDA;overflow:hidden;
   user-select:none;-webkit-user-select:none}
 /* El escenario mantiene el diseño original de 372x808 y se escala a la pantalla:
    así todas las coordenadas absolutas del HUD siguen valiendo, sin distorsión. */
-/* Los insets van acá y no en el cálculo de la escala: como webapp en iOS la altura
-   de layout incluye la franja de la barra de inicio, así que el escenario se
-   escalaba más alto que lo visible y el borde de abajo quedaba cortado. Medirlo con
-   visualViewport arreglaría eso pero el teclado también lo encoge, y la pantalla de
-   nombre tiene un input: al escribir el juego se achicaría. Los safe-area insets no
-   los mueve el teclado. */
-#wrap{position:fixed;top:env(safe-area-inset-top);right:env(safe-area-inset-right);
-  bottom:env(safe-area-inset-bottom);left:env(safe-area-inset-left);
-  display:grid;place-items:center}
-#stage{position:relative;width:372px;height:808px;overflow:hidden;background:#1C5638;
-  transform:scale(var(--s));transform-origin:center;contain:layout paint}
+/* Los insets VERTICALES no se le restan al espacio del escenario, y ésa era la causa
+   del escenario chico en iOS. El diseño es de 372x808 (relación 0,4604) y un iPhone
+   moderno es 390x844 (0,4621): CASI EXACTAMENTE la misma relación. O sea que el
+   escenario llena la pantalla sólo si tiene la pantalla entera, y cualquier franja que
+   se reserve se paga en los DOS ejes. Medido en 390x844 con la isla (inset 59) y la
+   barra de inicio (inset 34): reservarlas deja 751 px de alto útil, la escala cae de
+   1,045 a 0,930 —11% más chico— y como el ancho ya no es el que manda aparecen bandas
+   oscuras arriba Y a los costados. Es exactamente lo que se ve en la captura.
+   Así que el escenario va de borde a borde, abajo de la barra de estado (que es
+   translúcida por el meta black-translucent), y los insets se le suman como padding a
+   las pantallas que tienen contenido cerca del borde, en unidades de escenario
+   (--isat/--isab). El juego no se entera: el canvas y el HUD siguen en 372x808.
+   Los laterales SÍ se le restan: en vertical valen 0, y en apaisado —donde sobra
+   ancho— evitan que la isla tape el escenario.
+   Sigue sin medirse con visualViewport: el teclado también lo encoge y la pantalla de
+   nombre tiene un input, así que al escribir el juego se achicaría. */
+#wrap{position:fixed;top:0;bottom:0;left:var(--sa-left);right:var(--sa-right);
+  overflow:hidden}
+/* El centrado es explícito (absolute + translate) y NO con place-items:center. Medido:
+   cuando la escala baja de 1 —una pantalla más baja que 808, como un iPhone SE o
+   cualquier escritorio— la caja de LAYOUT del escenario (808 px, que el transform no
+   encoge) es más alta que el wrap; con overflow:hidden el wrap pasa a ser contenedor
+   de scroll y el centrado de grid se clampea al borde de arriba para no dejar
+   contenido inalcanzable. Resultado: el escenario quedaba 70 px más abajo del centro
+   y se le cortaba el borde de abajo. Con translate(-50%,-50%) la posición no depende
+   de la regla de alineación de nadie. */
+#stage{position:absolute;left:50%;top:50%;width:372px;height:808px;overflow:hidden;
+  background:#1C5638;transform:translate(-50%,-50%) scale(var(--s));
+  transform-origin:center;contain:layout paint}
 .screen{position:absolute;inset:0}
 .hide{display:none!important}
 .btn{-webkit-appearance:none;appearance:none;border:0;cursor:pointer;background:#E8C34A;
@@ -83,7 +110,7 @@ ${KEYFRAMES}
 <div id="wrap"><div id="stage">
 
   <!-- ── quién sos ──────────────────────────────────────────── -->
-  <div class="screen hide" id="scr-quien" style="display:flex;flex-direction:column;align-items:center;padding:70px 26px 24px;gap:14px;background:linear-gradient(180deg,#14402A 0%,#1C5638 60%,#0C2B1C 100%);overflow:auto">
+  <div class="screen hide" id="scr-quien" style="display:flex;flex-direction:column;align-items:center;padding:max(70px,calc(26px + var(--isat))) 26px max(24px,var(--isab));gap:14px;background:linear-gradient(180deg,#14402A 0%,#1C5638 60%,#0C2B1C 100%);overflow:auto">
     <div style="font:600 10px/1 var(--font-body);letter-spacing:.24em;color:#6FAE87;text-transform:uppercase">Elegí tu jugador</div>
     <h1 style="margin:0;font-family:var(--font-display);font-size:40px;font-weight:400;line-height:.9;color:#F4EEDA;text-transform:uppercase;text-align:center;padding:6px 0">¿Quién sos?</h1>
     <div id="playerList" style="display:flex;flex-direction:column;gap:7px;width:100%"></div>
@@ -91,7 +118,7 @@ ${KEYFRAMES}
   </div>
 
   <!-- ── jugador nuevo ──────────────────────────────────────── -->
-  <div class="screen hide" id="scr-nuevo" style="display:flex;flex-direction:column;align-items:center;padding:70px 26px 24px;gap:12px;background:linear-gradient(180deg,#14402A 0%,#1C5638 60%,#0C2B1C 100%);overflow:auto">
+  <div class="screen hide" id="scr-nuevo" style="display:flex;flex-direction:column;align-items:center;padding:max(70px,calc(26px + var(--isat))) 26px max(24px,var(--isab));gap:12px;background:linear-gradient(180deg,#14402A 0%,#1C5638 60%,#0C2B1C 100%);overflow:auto">
     <div style="font:600 10px/1 var(--font-body);letter-spacing:.24em;color:#6FAE87;text-transform:uppercase">Jugador nuevo</div>
     <h1 style="margin:0;font-family:var(--font-display);font-size:40px;font-weight:400;line-height:.9;color:#F4EEDA;text-transform:uppercase;text-align:center;padding:6px 0">¿Cómo te<br>llamás?</h1>
     <input id="inpNombre" maxlength="14" placeholder="Tu nombre" autocomplete="off" autocapitalize="words" aria-label="Tu nombre"
@@ -105,7 +132,7 @@ ${KEYFRAMES}
   </div>
 
   <!-- ── título ─────────────────────────────────────────────── -->
-  <div class="screen" id="scr-title" style="display:flex;flex-direction:column;align-items:center;padding:70px 26px 30px;background:linear-gradient(180deg,#14402A 0%,#1C5638 58%,#0C2B1C 100%)">
+  <div class="screen" id="scr-title" style="display:flex;flex-direction:column;align-items:center;padding:max(70px,calc(20px + var(--isat))) 26px max(30px,var(--isab));background:linear-gradient(180deg,#14402A 0%,#1C5638 58%,#0C2B1C 100%)">
     <div style="display:flex;align-items:flex-end;gap:7px;height:52px">
       <img src="miguelon/letter-s.svg" style="height:52px;width:auto;transform-origin:50% 100%;animation:letterPop .5s cubic-bezier(.2,.9,.3,1.4) .05s both,letterAlive 3.2s ease-in-out .9s infinite" alt="S">
       <img src="miguelon/letter-d.svg" style="height:50px;width:auto;transform-origin:50% 100%;animation:letterPop .5s cubic-bezier(.2,.9,.3,1.4) .17s both,letterAlive 3.6s ease-in-out 1.25s infinite" alt="D">
@@ -156,7 +183,7 @@ ${KEYFRAMES}
     </div>
     <div id="rGrito" style="position:absolute;left:22px;top:404px;max-width:196px;background:#F4EEDA;color:#0C2B1C;font-family:var(--font-display);font-size:19px;line-height:1.08;padding:10px 14px 11px;border-radius:16px 16px 16px 4px;box-shadow:0 4px 0 rgba(12,43,28,.35);opacity:0;pointer-events:none;transform-origin:8% 100%"></div>
     <div id="rFloat" style="position:absolute;top:300px;left:50%;transform:translateX(-50%);color:#E8C34A;font-family:var(--font-display);font-size:22px;opacity:0;pointer-events:none;text-shadow:0 2px 0 #0C2B1C"></div>
-    <div id="hintBox" style="position:absolute;left:22px;right:22px;bottom:30px;pointer-events:none;display:flex;justify-content:center">
+    <div id="hintBox" style="position:absolute;left:22px;right:22px;bottom:max(30px,var(--isab));pointer-events:none;display:flex;justify-content:center">
       <div id="rHint" style="font-family:var(--font-display);font-size:22px;line-height:1.1;letter-spacing:.04em;color:#F4EEDA;text-transform:uppercase;text-align:center;text-shadow:0 2px 0 rgba(12,43,28,.85)">Mantené apretado · soltá para revolear</div>
     </div>
     <div id="resSheet" class="hide">
@@ -169,14 +196,14 @@ ${KEYFRAMES}
           <div id="resPts" style="margin-top:8px;background:#E8C34A;color:#14402A;font-family:var(--font-display);font-size:13px;letter-spacing:.05em;padding:4px 12px;text-transform:uppercase"></div>
         </div>
       </div>
-      <div style="position:absolute;left:0;right:0;bottom:24px;display:flex;justify-content:center;animation:sheetUp .28s cubic-bezier(.2,.9,.3,1.2) both">
+      <div style="position:absolute;left:0;right:0;bottom:max(24px,var(--isab));display:flex;justify-content:center;animation:sheetUp .28s cubic-bezier(.2,.9,.3,1.2) both">
         <button class="btn" id="btnNext">Ver ranking</button>
       </div>
     </div>
   </div>
 
   <!-- ── ranking ────────────────────────────────────────────── -->
-  <div class="screen hide" id="scr-rank" style="display:flex;flex-direction:column;padding:40px 18px 20px;gap:12px;background:linear-gradient(180deg,#14402A 0%,#1C5638 60%,#0C2B1C 100%);overflow:auto">
+  <div class="screen hide" id="scr-rank" style="display:flex;flex-direction:column;padding:max(40px,calc(14px + var(--isat))) 18px max(20px,var(--isab));gap:12px;background:linear-gradient(180deg,#14402A 0%,#1C5638 60%,#0C2B1C 100%);overflow:auto">
     <div style="text-align:center">
       <div style="font:600 10px/1 var(--font-body);letter-spacing:.24em;color:#6FAE87;text-transform:uppercase">Ranking histórico</div>
       <div style="font-family:var(--font-display);font-size:28px;line-height:1;color:#F4EEDA;text-transform:uppercase;margin-top:6px">El último revoleo</div>
@@ -341,6 +368,26 @@ zone.addEventListener('pointercancel', e => game.onUp(e));
 
 // el escenario de 372x808 se escala para llenar la pantalla sin deformarse
 const stage = $('stage');
+// ?debug=1 imprime las medidas REALES del dispositivo encima del juego. Existe porque
+// el tamaño en la webapp de iOS ya se arregló dos veces a ojo desde una captura: si
+// vuelve a fallar, que vuelva con números y no con una estimación de píxeles de un JPEG.
+const DEBUG = /[?&]debug=1/.test(location.search);
+let dbg = null, probe = null;
+if (DEBUG) {
+  // Los insets no se pueden leer de una custom property (env() se sustituye al calcular
+  // el valor y getPropertyValue no promete el resultado). Un probe con los env() en el
+  // padding sí los devuelve resueltos en px.
+  probe = document.createElement('div');
+  probe.style.cssText = 'position:fixed;top:0;left:0;width:0;height:0;visibility:hidden;' +
+    'pointer-events:none;padding:env(safe-area-inset-top,0px) env(safe-area-inset-right,0px) ' +
+    'env(safe-area-inset-bottom,0px) env(safe-area-inset-left,0px)';
+  dbg = document.createElement('pre');
+  dbg.style.cssText = 'position:fixed;left:0;top:0;z-index:99;margin:0;padding:5px 7px;' +
+    'font:11px/1.4 ui-monospace,SFMono-Regular,monospace;color:#E8C34A;' +
+    'background:rgba(6,26,17,.88);white-space:pre;pointer-events:none';
+  document.body.appendChild(probe);
+  document.body.appendChild(dbg);
+}
 const fit = () => {
   const r = document.getElementById('wrap').getBoundingClientRect();
   const w = r.width || innerWidth, h = r.height || innerHeight;
@@ -351,6 +398,22 @@ const fit = () => {
   // posterior lo recuperaba, o sea juego invisible. Reproducido redimensionando en
   // vivo; en un teléfono lo dispara rotar la pantalla.
   if (s > 0) document.documentElement.style.setProperty('--s', s);
+  if (dbg) {
+    const q = getComputedStyle(probe), st = stage.getBoundingClientRect();
+    dbg.textContent = [
+      'screen  ' + screen.width + 'x' + screen.height,
+      'inner   ' + innerWidth + 'x' + innerHeight,
+      'vv      ' + (window.visualViewport
+        ? Math.round(visualViewport.width) + 'x' + Math.round(visualViewport.height) : '-'),
+      'wrap    ' + Math.round(w) + 'x' + Math.round(h),
+      'insets  t' + q.paddingTop + ' b' + q.paddingBottom +
+        ' l' + q.paddingLeft + ' r' + q.paddingRight,
+      'escala  ' + s.toFixed(4) + '  (llenar = ' + Math.min(w / 372, h / 808).toFixed(4) + ')',
+      'pintado ' + Math.round(st.width) + 'x' + Math.round(st.height) +
+        ' @ ' + Math.round(st.left) + ',' + Math.round(st.top),
+      'standalone ' + (navigator.standalone === true || matchMedia('(display-mode:standalone)').matches),
+    ].join('\\n');
+  }
 };
 // ResizeObserver y no sólo el evento resize: el evento no dispara en todos los
 // contextos (documentos embebidos/ocultos) y el escenario quedaba mal escalado.
