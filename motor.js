@@ -56,6 +56,32 @@
     AVISO_MIN_MS: 800,    // aviso mínimo entre ver un objetivo y su ventana
     VENTANA_PERFECTO: 60, // ms de tolerancia para el rebote perfecto
     VENTANA_BUENO: 160,   // ms de tolerancia para el rebote bueno
+    // Presupuesto de toques. Es el reemplazo del castigo VIEJO por errar, que era
+    // físico e invisible: el raspón te comía 35% de vx, el arco se acortaba, en algún
+    // momento no había nada al alcance y el vuelo se moría sin que el jugador supiera
+    // por qué. Ahora errar cuesta un número que está en pantalla y nada más.
+    // 3 y 3 no son de gusto: el toque cuesta 1 y la pegada devuelve 3, así que el
+    // presupuesto sube sólo si NO gastás más de 3 intentos por objetivo. O sea que la
+    // barra es "acertar uno de cada tres", que es exactamente el margen que hace falta
+    // para que la ventana de 160 ms se pueda buscar a tientas sin morirse.
+    TOQUES_INICIAL: 3,
+    TOQUES_PEGADA: 3,
+    // El tope existe para que el presupuesto no se vuelva irrelevante: sin él, un
+    // jugador que encadena 20 pegadas junta 60 toques y a partir de ahí puede tocar al
+    // azar todo el vuelo. 9 son tres objetivos de colchón.
+    TOQUES_MAX: 9,
+    // Decaimiento de vx por paso de física, y NO es el drag que se sacó en e9d8357.
+    // Ese era un impuesto del que no se podía escapar: frenaba ~21% por segundo pasara
+    // lo que pasara, la cadena de perfectos se equilibraba abajo del techo y los arcos
+    // se acortaban solos. Éste se RESETEA en cada pegada, así que la velocidad pasa a
+    // ser un recurso que se recarga pegándole a algo — que es justo lo que el jugador
+    // hace cuando juega bien.
+    // El valor sale de un objetivo de diseño medible: un arco entero sin pegarle a nada
+    // tiene que costar ~25% de la velocidad, así que ~4 arcos fallados llevan del techo
+    // al piso. Un arco dura ~140 pasos de física, y 1-0.75^(1/140) = 0,00205.
+    // OJO con subirlo: lo único que frena abajo es PISO_VX, y abajo de 1,2 el arco
+    // entero avanza tan poco que ninguna cima queda al alcance (ver PISO_VX).
+    DECAY_VX: 0.00205,
   };
 
   const acotar = (v, a, b) => (v < a ? a : v > b ? b : v);
@@ -166,7 +192,14 @@
   function paso(est) {
     const sp = Math.hypot(est.vx, est.vy);
     const drag = 1 - Math.min(0.007, 0.0008 + sp * 0.0004);
-    let vy = (est.vy + F.G) * drag, vx = acotar(est.vx, -F.VX_MAX, F.VX_MAX);
+    // El decaimiento va ACÁ y no en el bucle del vuelo, y no es un detalle de estilo:
+    // trayectoria() consume este mismo paso, así que si el vuelo en vivo frenara y la
+    // predicción no, el arco fantasma y el paso de llegada del anillo apuntarían a un
+    // futuro que no va a pasar. Es la misma regla que ya obligó a extraer cruzaCima y a
+    // recalcular el objetivo después de un choque: una sola física en todo el proyecto.
+    // vx nunca es negativo (el lanzamiento es +, la pegada conserva el signo y el choque
+    // multiplica por .22), así que alcanza con decaer la magnitud.
+    let vy = (est.vy + F.G) * drag, vx = decaer(acotar(est.vx, -F.VX_MAX, F.VX_MAX));
     let x = est.x + vx, y = est.y + vy;
     if (y < F.TECHO) { y = F.TECHO; if (vy < 0) vy = 0.5; }
     return { x: x, y: y, vx: vx, vy: vy };
@@ -186,13 +219,40 @@
     return out;
   }
 
+  // `h` es el alto de la CAJA. `aire`, si está, es el rango (min, max) de px entre el
+  // suelo y la BASE del bicho: los tipos con aire flotan, los que no están apoyados.
+  // Los de arriba existen porque con sólo bichos parados en el pasto las cimas vivían
+  // entre y=186 (copa del árbol) y y=212 (techo del carrito): una banda de 26 px,
+  // mientras el arco del palo llega hasta y=50. Nueve décimos de la pantalla no
+  // decidían nada. Con los de aire la banda de cimas pasa a 130..212, o sea 3,2x.
+  // Los rangos salen de dos cotas MEDIDAS:
+  //  - por arriba: un revoleo sube 110,1 px, así que desde el suelo (y=232) el apex
+  //    llega a 121,9 y desde la copa del árbol (y=186) a 75,9. Una cima en 130 queda al
+  //    alcance del primer arco del vuelo; más arriba habría que llegar escalando y hay
+  //    escenarios donde no se puede.
+  //  - por abajo: tienen que quedar arriba de la copa del árbol (186) para agregar
+  //    banda de verdad y no repetir la altura que ya existe apoyada en el pasto.
+  // Son cima y no altura de vuelo porque cima es lo único que mira la física.
   const TIPOS = {
     tree:   { w: 26, h: 46 },
     cart:   { w: 30, h: 20 },
     caddie: { w: 16, h: 30 },
     sdga:   { w: 18, h: 30 },
+    dron:   { w: 20, h: 12, aire: [40, 84] },
+    cable:  { w: 34, h: 6,  aire: [56, 96] },
+    // El PASTO: un manchón de fairway con la cima en el suelo. No se genera nunca (no
+    // está en CLAVES); existe sólo como la plataforma de último recurso que `rellenar`
+    // planta cuando no hay nada más, y es la pieza que hace verdadero "errar no te mata".
+    // Sin él, medido: el palo erra un toque a y=176, cae, y a y=201 ya está abajo de la
+    // cima más baja de la cancha (212) — no hay DÓNDE plantar nada. El pique del suelo
+    // tampoco lo salva: devuelve vy = -|vy|*0,4, o sea que desde vy 3,25 sube 16 px y el
+    // apex queda en 216, todavía abajo de 212. O sea que un solo toque errado terminaba
+    // el vuelo con 8 toques sin gastar en el bolsillo, y el presupuesto entero era
+    // decoración. Con el pasto, errar te manda al suelo y el suelo te devuelve arriba si
+    // le pegás bien: el castigo pasa a ser el toque, que es lo que se pidió.
+    pasto:  { w: 16, h: 0 },
   };
-  const CLAVES = ['tree', 'cart', 'caddie', 'sdga'];
+  const CLAVES = ['tree', 'cart', 'caddie', 'sdga', 'dron', 'cable'];
   // Distancia mínima adelante de est.x para que un plantado cuente como objetivo real.
   // NO se puede subir para dejar el plantado fuera del campo visible (194,5 px): la x
   // del plantado la manda la física —es donde el arco cruza la cima— así que exigirle
@@ -211,9 +271,68 @@
     return function () { s = (s * 1103515245 + 12345) & 0x7fffffff; return s / 0x7fffffff; };
   }
 
+  // Todo obstáculo sale de acá con la MISMA forma: {t, x, w, alto, cima}. `cima` es lo
+  // único que mira la física del rebote (cruzaCima) y `alto` lo único que define la
+  // pared (choca). Con esos dos campos, un dron a 60 px del pasto y un árbol apoyado en
+  // él son el mismo objeto para el motor: no hay un caso 'está en el aire' en ninguna
+  // parte. El campo `h` se fue a propósito — sobrevivía sólo porque el componente
+  // calculaba la caja como (GY - o.h, GY), que es exactamente la cuenta que da por
+  // sentado que todo está apoyado en el suelo.
   function crear(rand, x) {
-    const t = CLAVES[(rand() * CLAVES.length) | 0], d = TIPOS[t];
-    return { t: t, x: Math.round(x), w: d.w, h: d.h, cima: F.GY - d.h };
+    const t = CLAVES[(rand() * CLAVES.length) | 0];
+    return enX(t, x, rand);
+  }
+
+  // Un obstáculo de tipo `t` en x. Si el tipo flota, la altura se sortea en su rango;
+  // `cimaFija` la impone (lo usa el que planta, que necesita la cima donde pasa el arco).
+  function enX(t, x, rand, cimaFija) {
+    const d = TIPOS[t];
+    const base = d.aire
+      ? F.GY - (d.aire[0] + (rand ? rand() : 0.5) * (d.aire[1] - d.aire[0]))
+      : F.GY;
+    const cima = cimaFija != null ? cimaFija : Math.round(base) - d.h;
+    return { t: t, x: Math.round(x), w: d.w, alto: d.h, cima: cima };
+  }
+
+  // Las cimas a las que un tipo puede ir. Los apoyados tienen una sola; los que flotan,
+  // todo su rango — y de ahí sale el muestreo que usa el que planta.
+  function cimasDe(t) {
+    const d = TIPOS[t];
+    if (!d.aire) return [F.GY - d.h];
+    const alta = F.GY - d.aire[1] - d.h, baja = F.GY - d.aire[0] - d.h;
+    return [baja, Math.round((baja + alta) / 2), alta];
+  }
+
+  // La caja del obstáculo, con 4 px de aire a los costados y 3 abajo: es el mismo margen
+  // que el test de choque del vuelo ya le daba, extraído para que exista UNA sola vez.
+  // Escrito en el componente como (GY - o.h, GY + 3) daba por sentado que todo estaba
+  // apoyado en el pasto.
+  //
+  // LOS QUE FLOTAN NO SON PARED: son plataforma de un solo lado. Se les puede pegar
+  // arriba (cruzaCima no cambia) y se les pasa por abajo y por al lado sin chocar.
+  // No es una comodidad, es lo único que hace que existan: medido con el bot, con los de
+  // aire sólidos los 5 de 5 vuelos IMPECABLES morían chocando un dron, y en uno de ellos
+  // el dron era el ÚNICO choque de todo el vuelo. La razón es geométrica y no se arregla
+  // separando más los obstáculos: el palo sale del rebote subiendo 110 px y las cimas de
+  // aire viven entre 130 y 180, o sea justo en el techo del arco de salida. Un bicho
+  // sólido ahí es una pared que aparece encima del jugador en el mismo instante en que
+  // rebota bien, y no tiene forma de evitarla — el vuelo se termina por el escenario y no
+  // por el jugador, que es lo único que el diseño no permite.
+  // Los apoyados en el pasto SIGUEN siendo sólidos: su pared se ve venir de costado, que
+  // es una pared que se puede leer y esquivar eligiendo a qué le pegás.
+  function choca(o, c) {
+    if (TIPOS[o.t] && (TIPOS[o.t].aire || !TIPOS[o.t].h)) return false;
+    return c.x > o.x - 4 && c.x < o.x + o.w + 4 &&
+           c.y > o.cima && c.y < o.cima + o.alto + 3;
+  }
+
+  // Pasar raspando por ARRIBA de la cima, sin tocarla: es el truco 'AL RAS'. Vive acá y
+  // no en el componente por la misma regla que cruzaCima y choca — toda comparación
+  // contra una cima en un solo lugar. Escrita en el vuelo usaba GY - o.h, o sea que un
+  // bicho en el aire nunca la disparaba.
+  function alRas(o, c) {
+    return !choca(o, c) && c.x > o.x - 8 && c.x < o.x + o.w + 8 &&
+           c.y < o.cima && c.y > o.cima - 20;
   }
 
   // La separación mínima entre obstáculos sale de acá y no de un literal metido en el
@@ -296,11 +415,24 @@
   // terminar el vuelo.
   function rellenar(obs, rand, est) {
     if (alcanzables(obs, est).length) return 'ya-habia';
-    if (est.vy >= 0) return 'sin-salida';
+    // ACÁ había un `if (est.vy >= 0) return 'sin-salida'`: a un palo que ya venía bajando
+    // no se le regalaba salida, porque en el diseño viejo eso era el raspón y el raspón
+    // ERA el castigo por errar. Se fue con el raspón. Ahora el castigo por errar es el
+    // toque gastado, y el palo que viene bajando después de un toque errado es el estado
+    // NORMAL del jugador que se equivocó: negarle un objetivo ahí es matarlo por el error
+    // que el presupuesto de toques existe para perdonar.
+    // Lo único que puede terminar un vuelo por falta de escenario sigue siendo la
+    // geometría: si el arco no llega a ninguna cima a AVANCE_MIN o más, no hay DÓNDE
+    // plantar por construcción y ahí sí se devuelve 'sin-salida'. Eso no es un hueco del
+    // generador, es un palo demasiado bajo o demasiado lento, y es un final legítimo.
     const tr = trayectoria(est, 1200);
     let puesto = null;
+    // Candidatos: cada tipo con cada cima a la que puede ir. Los que flotan aportan tres
+    // alturas en vez de una, así que el arco tiene más de dónde agarrarse y la invariante
+    // se cumple en más estados que cuando todos los candidatos estaban apoyados en el
+    // pasto y sus cimas cabían en 26 px.
     for (const clave of CLAVES) {
-      const cima = F.GY - TIPOS[clave].h;
+     for (const cima of cimasDe(clave)) {
       for (let i = 1; i < tr.length; i++) {
         if (tr[i].vy > 0 && tr[i - 1].y <= cima && tr[i].y >= cima) {
           const x = Math.round(tr[i].x - TIPOS[clave].w / 2);
@@ -313,11 +445,25 @@
           // 45..53 en vez de 40, y candidatos perfectamente buenos quedaban afuera por
           // 0,2 a 7,9 px.
           if (tr[i].x < est.x + AVANCE_MIN) continue;
-          puesto = { t: clave, x: x, w: TIPOS[clave].w, h: TIPOS[clave].h, cima: cima };
+          puesto = enX(clave, x, null, cima);
           break;
         }
       }
       if (puesto) break;
+     }
+     if (puesto) break;
+    }
+    // ÚLTIMO RECURSO: el pasto, y va EXENTO de AVANCE_MIN. La exención no es una
+    // excepción cómoda, es que AVANCE_MIN mide otra cosa: existe para que un objetivo
+    // ENTRE en pantalla con tiempo de reacción, y el suelo no entra en pantalla — está
+    // dibujado abajo todo el vuelo, el jugador lo ve venir desde el apex. Pedirle 40 px
+    // de anticipación a la única cosa que nunca hay que descubrir es lo que dejaba morir
+    // al palo bajo: medido, desde y=201 bajando a vy 3,25 el suelo queda 35 px adelante y
+    // la barra pide 40, o sea que se lo negaba por 5 px.
+    if (!puesto) {
+      const tr2 = trayectoria(est, 1200), fin = tr2[tr2.length - 1];
+      if (fin.y >= F.GY - 1 && fin.x > est.x)
+        puesto = enX('pasto', Math.round(fin.x - TIPOS.pasto.w / 2), null, F.GY);
     }
     if (!puesto) return 'sin-salida';
     // Lo que el plantado solapa se va de la cancha. Si quedaran los dos, en el mismo
@@ -404,22 +550,55 @@
   // hasta el timeout de 3,6 s.
   function resolverRebote(est, desfaseMs) {
     const d = Math.abs(desfaseMs);
+    if (d > F.VENTANA_BUENO)
+      // FALLADO, y no pasa NADA físico: ni altura, ni velocidad, ni giro. El palo sigue
+      // el mismo arco y el objetivo sigue adelante si todavía no lo pasó, así que se
+      // puede volver a tocar. Lo único que cuesta es un toque del presupuesto.
+      // Esto era el 'raspón', que te comía 35% de vx y no ganaba altura. Medido en su
+      // momento: cada raspón encadenado llevaba la vx a 0,36 y de ahí el arco entero
+      // avanzaba 41 px, tan poco que ninguna cima quedaba al alcance y el vuelo se moría
+      // tres rebotes después de un error que el jugador nunca vio. Ése era el castigo
+      // invisible; el castigo ahora es un número que está en pantalla.
+      return { tipo: 'fallado', vy: est.vy, vx: est.vx };
+    // PEGADA. La velocidad se RESETEA hacia el techo en vez de multiplicarse, y es la
+    // contracara exacta del decaimiento: baja sola, la devuelve pegarle a algo. El techo
+    // es VX_MAX y no un número nuevo porque VX_MAX es el valor con el que está verificado
+    // el presupuesto de legibilidad (0 de 4.000 objetivos abajo de los 800 ms).
+    // El perfecto resetea entero y el bueno la mitad de lo que falta: así la diferencia
+    // entre los dos se ve en el largo del arco siguiente y no sólo en el HUD.
     const r = d <= F.VENTANA_PERFECTO
-      // El perfecto acelera de verdad: sin el drag que se lo comía, 1,06 + 0,4 por toque
-      // sube la cadena del arranque al techo en ~12 perfectos, y eso se ve como arco más
-      // largo y más distancia, no sólo como un número en el HUD.
-      ? { tipo: 'perfecto', vy: -IMPULSO, vx: est.vx * 1.06 + 0.4 }
-      : d <= F.VENTANA_BUENO
-      // El bueno MANTIENE, y ahora mantener quiere decir mantener: antes devolvía vx sin
-      // cambio y el drag se la comía igual.
-      ? { tipo: 'bueno', vy: -IMPULSO * 0.78, vx: est.vx }
-      // Raspón: pierde 35% de velocidad y no gana altura. No termina el vuelo por sí
-      // solo; el palo baja y el jugador todavía puede recuperarse antes del suelo.
-      : { tipo: 'raspon', vy: Math.max(0.5, est.vy * 0.5), vx: est.vx * 0.65 };
+      ? { tipo: 'perfecto', vy: -IMPULSO, vx: F.VX_MAX }
+      : { tipo: 'bueno', vy: -IMPULSO * 0.78, vx: est.vx + (F.VX_MAX - est.vx) * 0.5 };
     r.vx = acotar(r.vx, F.PISO_VX, F.VX_MAX);
     return r;
   }
 
+  // El decaimiento de vx, por paso de física. Ver F.DECAY_VX: es lo que convierte la
+  // velocidad en un recurso que se recarga pegándole a algo, y no en el impuesto
+  // inevitable que se sacó en e9d8357. Nunca baja de PISO_VX, que es la velocidad más
+  // baja a la que el arco todavía alcanza alguna cima.
+  // Sólo BAJA, nunca sube: si el palo ya viene abajo del piso, se lo deja donde está.
+  // El Math.max solo lo LEVANTABA, y eso rompía el final del vuelo: el palo rodando en el
+  // pasto termina cuando |vx| < 0,12, y con el piso aplicado en la integración volvía a
+  // 1,2 en el paso siguiente, así que ese final era inalcanzable y TODOS los vuelos
+  // llegaban al timeout de 3.600 pasos rodando. Es exactamente lo que el comentario viejo
+  // de PISO_VX advertía cuando explicaba por qué el piso vivía en el rebote y no acá.
+  // El piso sigue rigiendo donde importa: la salida de resolverRebote lo acota, así que
+  // toda PEGADA deja al palo con arco suficiente para alcanzar alguna cima. Un palo que
+  // quedó abajo del piso por un choque (c.vx *= .22) se queda abajo, y eso es el diseño:
+  // el choque es un final legítimo del vuelo.
+  const decaer = vx => vx <= F.PISO_VX ? vx : Math.max(F.PISO_VX, vx * (1 - F.DECAY_VX));
+
+  // El presupuesto de toques después de resolver un toque. El toque se cobra SIEMPRE,
+  // acierte o no, y se cobra antes de resolverlo: si sólo costara al errar, tocar sería
+  // gratis cuando sale bien y no habría ningún techo para el tanteo a ciegas.
+  const toquesTras = (toques, tipo) => tipo === 'fallado'
+    ? toques
+    : Math.min(F.TOQUES_MAX, toques + F.TOQUES_PEGADA);
+
+  // El perfecto sube el combo, el bueno lo mantiene y el fallado lo parte al medio. El
+  // fallado no toca la física, así que ÉSTE es todo su castigo además del toque gastado:
+  // errar sale caro en puntaje y gratis en supervivencia, que es lo que se pidió.
   function comboTras(combo, tipo) {
     if (tipo === 'perfecto') return combo + 1;
     if (tipo === 'bueno') return combo;
@@ -443,8 +622,10 @@
   const api = { F: F, acotar: acotar, metros: metros, encuadre: encuadre,
                 camObjetivo: camObjetivo, adelante: adelante, vLanzamiento: vLanzamiento,
                 paso: paso, trayectoria: trayectoria,
-                TIPOS: TIPOS, AVANCE_MIN: AVANCE_MIN,
-                lcg: lcg, generar: generar, alcanzables: alcanzables,
+                TIPOS: TIPOS, CLAVES: CLAVES, AVANCE_MIN: AVANCE_MIN,
+                lcg: lcg, generar: generar, alcanzables: alcanzables, crear: crear,
+                enX: enX, cimasDe: cimasDe, choca: choca, alRas: alRas, decaer: decaer,
+                toquesTras: toquesTras,
                 cruzaCima: cruzaCima, rellenar: rellenar, avisoMs: avisoMs,
                 resolverRebote: resolverRebote, comboTras: comboTras, acreditar: acreditar,
                 factorVariedad: factorVariedad, IMPULSO: IMPULSO };

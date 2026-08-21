@@ -164,7 +164,7 @@ ${KEYFRAMES}
     </div>
     </div>
     <div style="font-family:var(--font-display);font-size:46px;line-height:.9;color:#E8C34A;text-transform:uppercase;text-align:center;margin-top:6px">Miguelón</div>
-    <div style="font:400 12px/1.5 var(--font-body);color:rgba(244,238,218,.78);text-align:center;max-width:264px;margin-top:6px">Camisa hawaiana, paciencia cero. Un solo revoleo: tocá a tiempo en cada rebote y el palo no baja más.</div>
+    <div style="font:400 12px/1.5 var(--font-body);color:rgba(244,238,218,.78);text-align:center;max-width:264px;margin-top:6px">Camisa hawaiana, paciencia cero. Un solo revoleo: cada toque cuesta, cada pegada te devuelve tres, y el palo no baja hasta que te quedes sin.</div>
     <div id="recordLine" class="hide" style="background:#E8C34A;color:#14402A;font-family:var(--font-display);font-size:13px;letter-spacing:.08em;padding:3px 11px;text-transform:uppercase;margin-top:10px"></div>
     <button id="btnQuien" style="display:flex;align-items:center;gap:8px;background:rgba(12,43,28,.5);border:1px solid rgba(244,238,218,.25);border-radius:999px;padding:7px 14px;margin-top:8px;cursor:pointer;color:#F4EEDA;font-family:var(--font-display);font-size:13px;line-height:1;text-transform:uppercase">
       <span id="quienSoy"></span>
@@ -181,6 +181,7 @@ ${KEYFRAMES}
       <div id="rBest" style="font:600 9px/1 var(--font-body);letter-spacing:.16em;color:rgba(244,238,218,.85);text-transform:uppercase;background:rgba(12,43,28,.82);border-radius:9px;padding:5px 9px">Total 0 pts</div>
       <div id="rTricks" style="font:600 8px/1.4 var(--font-body);letter-spacing:.12em;color:#F4EEDA;text-transform:uppercase;background:rgba(12,43,28,.86);border-radius:9px;padding:5px 9px;max-width:150px;text-align:right;opacity:0"></div>
     </div>
+    <div id="rToques" style="position:absolute;top:170px;left:12px;font-family:var(--font-display);font-size:30px;line-height:1.05;color:#E8C34A;background:rgba(12,43,28,.82);border-radius:14px;padding:5px 12px 7px;opacity:0;pointer-events:none">3 toques</div>
     <div id="rGrito" style="position:absolute;left:22px;top:404px;max-width:196px;background:#F4EEDA;color:#0C2B1C;font-family:var(--font-display);font-size:19px;line-height:1.08;padding:10px 14px 11px;border-radius:16px 16px 16px 4px;box-shadow:0 4px 0 rgba(12,43,28,.35);opacity:0;pointer-events:none;transform-origin:8% 100%"></div>
     <div id="rFloat" style="position:absolute;top:300px;left:50%;transform:translateX(-50%);color:#E8C34A;font-family:var(--font-display);font-size:22px;opacity:0;pointer-events:none;text-shadow:0 2px 0 #0C2B1C"></div>
     <div id="hintBox" style="position:absolute;left:22px;right:22px;bottom:max(30px,var(--isab));pointer-events:none;display:flex;justify-content:center">
@@ -246,7 +247,7 @@ const game = new Component();
 game.props = { censura: 'Sin filtro', sonido: true };
 
 // los refs del motor apuntan directo a los nodos del shell
-const REFS = { cv:'cv', rMetros:'rMetros', rBest:'rBest',
+const REFS = { cv:'cv', rMetros:'rMetros', rBest:'rBest', rToques:'rToques',
   rGrito:'rGrito', rFloat:'rFloat', rHint:'rHint', rTricks:'rTricks' };
 for (const k in REFS) game[k].current = $(REFS[k]);
 

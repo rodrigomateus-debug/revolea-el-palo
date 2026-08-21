@@ -164,7 +164,7 @@ body{font-family:var(--font-body);color:#F4EEDA;overflow:hidden;
     </div>
     </div>
     <div style="font-family:var(--font-display);font-size:46px;line-height:.9;color:#E8C34A;text-transform:uppercase;text-align:center;margin-top:6px">Miguelón</div>
-    <div style="font:400 12px/1.5 var(--font-body);color:rgba(244,238,218,.78);text-align:center;max-width:264px;margin-top:6px">Camisa hawaiana, paciencia cero. Un solo revoleo: tocá a tiempo en cada rebote y el palo no baja más.</div>
+    <div style="font:400 12px/1.5 var(--font-body);color:rgba(244,238,218,.78);text-align:center;max-width:264px;margin-top:6px">Camisa hawaiana, paciencia cero. Un solo revoleo: cada toque cuesta, cada pegada te devuelve tres, y el palo no baja hasta que te quedes sin.</div>
     <div id="recordLine" class="hide" style="background:#E8C34A;color:#14402A;font-family:var(--font-display);font-size:13px;letter-spacing:.08em;padding:3px 11px;text-transform:uppercase;margin-top:10px"></div>
     <button id="btnQuien" style="display:flex;align-items:center;gap:8px;background:rgba(12,43,28,.5);border:1px solid rgba(244,238,218,.25);border-radius:999px;padding:7px 14px;margin-top:8px;cursor:pointer;color:#F4EEDA;font-family:var(--font-display);font-size:13px;line-height:1;text-transform:uppercase">
       <span id="quienSoy"></span>
@@ -181,6 +181,7 @@ body{font-family:var(--font-body);color:#F4EEDA;overflow:hidden;
       <div id="rBest" style="font:600 9px/1 var(--font-body);letter-spacing:.16em;color:rgba(244,238,218,.85);text-transform:uppercase;background:rgba(12,43,28,.82);border-radius:9px;padding:5px 9px">Total 0 pts</div>
       <div id="rTricks" style="font:600 8px/1.4 var(--font-body);letter-spacing:.12em;color:#F4EEDA;text-transform:uppercase;background:rgba(12,43,28,.86);border-radius:9px;padding:5px 9px;max-width:150px;text-align:right;opacity:0"></div>
     </div>
+    <div id="rToques" style="position:absolute;top:170px;left:12px;font-family:var(--font-display);font-size:30px;line-height:1.05;color:#E8C34A;background:rgba(12,43,28,.82);border-radius:14px;padding:5px 12px 7px;opacity:0;pointer-events:none">3 toques</div>
     <div id="rGrito" style="position:absolute;left:22px;top:404px;max-width:196px;background:#F4EEDA;color:#0C2B1C;font-family:var(--font-display);font-size:19px;line-height:1.08;padding:10px 14px 11px;border-radius:16px 16px 16px 4px;box-shadow:0 4px 0 rgba(12,43,28,.35);opacity:0;pointer-events:none;transform-origin:8% 100%"></div>
     <div id="rFloat" style="position:absolute;top:300px;left:50%;transform:translateX(-50%);color:#E8C34A;font-family:var(--font-display);font-size:22px;opacity:0;pointer-events:none;text-shadow:0 2px 0 #0C2B1C"></div>
     <div id="hintBox" style="position:absolute;left:22px;right:22px;bottom:max(30px,var(--isab));pointer-events:none;display:flex;justify-content:center">
@@ -325,6 +326,7 @@ class Component extends DCLogic{
   acc=0;lastT=0;lastTick=0;raf=0;wd=0;
   cv=React.createRef();rMetros=React.createRef();
   rBest=React.createRef();rGrito=React.createRef();rFloat=React.createRef();rHint=React.createRef();rTricks=React.createRef();
+  rToques=React.createRef();
 
   componentDidMount(){
     this.imgs={};this.red={};
@@ -569,12 +571,17 @@ class Component extends DCLogic{
     g.club={x:TEE+8,y:GY-44,vx:Math.cos(a)*v,vy:-Math.sin(a)*v,rot:-a,
       spin:Math.max(.22,.19+g.locked*.24),grounded:false,trail:[]};
     g.phase='fly';g.flyT=0;g.pasosVuelo=0;g.rageT=240;
+    // El presupuesto de toques del vuelo. Arranca en 3 y cada pegada devuelve 3, así que
+    // sube sólo si no gastás más de tres intentos por objetivo: la barra es "acertar uno
+    // de cada tres", que es el margen que hace falta para buscar la ventana a tientas.
+    g.toques=Motor.F.TOQUES_INICIAL;
     this.txt(this.rHint,'Tocá justo cuando llegue');g.fx.push({x:TEE+14,y:GY-42,t:20});
     // El shake más grande de todos, y Motor.adelante le descuenta al presupuesto de
     // legibilidad justo este: si acá se sube el número, hay que subir F.SHAKE_MAX.
     g.shake=Motor.F.SHAKE_MAX;this.sfxLaunch();
     if(g.perfect)this.showFloat('¡PERFECTO!');
     this.op(this.rMetros,'1');
+    this.op(this.rToques,'1');
     this.buscarObjetivo();
   }
   // El objetivo es el primer obstáculo que el arco actual cruza a la altura de su
@@ -605,29 +612,48 @@ class Component extends DCLogic{
       if(Motor.cruzaCima(tr[i-1],tr[i],o))return (this.g.pasosVuelo||0)+i;
     return null;}
 
-  // Toque del jugador durante el vuelo.
+  // Toque del jugador durante el vuelo. El toque se COBRA siempre, acierte o no, y se
+  // cobra ANTES de resolverlo: si sólo costara al errar, tocar sería gratis cuando sale
+  // bien y no habría ningún techo para el tanteo a ciegas —que es lo que hoy se puede
+  // hacer, porque tocar no cuesta nada y el único castigo era físico e invisible.
+  // Sin toques no pasa nada: el palo sigue su arco y cae. El vuelo no se corta acá.
   tocar(){const g=this.g,c=g.club;
     if(!c||g.phase!=='fly'||!g.objetivo||g.pasoObjetivo==null)return;
+    if(g.toques<=0){this.showFloat('¡SIN TOQUES!');g.shake=2;return}
+    g.toques--;
     const desfase=(g.pasosVuelo-g.pasoObjetivo)*(Motor.F.STEP/Motor.F.VUELO);
     this.aplicarRebote(desfase);}
 
   aplicarRebote(desfaseMs){const g=this.g,c=g.club,o=g.objetivo;
     const r=Motor.resolverRebote({x:c.x,y:c.y,vx:c.vx,vy:c.vy},desfaseMs);
+    if(r.tipo==='fallado'){
+      // FALLADO: no se toca NADA de la física. El objetivo sigue adelante y se puede
+      // volver a tocar, así que un toque adelantado no arruina el objetivo — sólo cuesta.
+      // Todo el castigo es el toque ya cobrado más el combo partido al medio. Antes esto
+      // era el raspón, que además te comía 35% de vx: el arranque de la espiral que
+      // mataba el vuelo tres rebotes después por algo que el jugador nunca vio.
+      // NO se llama a buscarObjetivo: el arco no cambió, así que el paso de llegada que
+      // el anillo está mostrando sigue siendo el correcto.
+      g.combo=Motor.comboTras(g.combo,r.tipo);
+      this.sfxBail();this.showFloat('¡AL AIRE!');g.shake=3;
+      return;
+    }
     // se acredita con el combo vigente ANTES de aplicar el resultado
     const tramo=Motor.metros(c.x)-Motor.metros(g.xTramo);
     const factor=Motor.factorVariedad(g.ultimosTipos,o?o.t:'');
     g.puntos+=Math.round(Motor.acreditar(g.combo,tramo)*factor);
     g.xTramo=c.x;
     g.combo=Motor.comboTras(g.combo,r.tipo);
-    c.vy=r.vy;c.vx=r.vx;c.grounded=false;
+    // La pegada devuelve 3 toques, con tope. Es la única fuente de toques del vuelo.
+    g.toques=Motor.toquesTras(g.toques,r.tipo);
     // INERTE, no `hit`: el trampolín en el que caíste bien no se dibuja con la paleta
     // de "golpeado" —era un éxito, no un choque— pero tampoco puede volver a ser pared
     // mientras el palo sale de su caja. `inerte` es exactamente eso: deja de chocar y
     // se sigue dibujando entero. `hit` queda sólo para los choques de verdad.
     if(o){g.ultimosTipos.push(o.t);if(g.ultimosTipos.length>4)g.ultimosTipos.shift();
       o.inerte=true;g.fx.push({x:c.x,y:c.y,t:16});}
+    c.vy=r.vy;c.vx=r.vx;c.grounded=false;
     if(r.tipo==='perfecto'){this.sfxTrick();this.showFloat('+'+g.puntos+'  ×'+g.combo)}
-    else if(r.tipo==='raspon'){this.sfxBail();this.showFloat('¡RASPÓN!')}
     else this.sfxLand();
     g.shake=r.tipo==='perfecto'?4:6;
     this.buscarObjetivo();}
@@ -639,17 +665,17 @@ class Component extends DCLogic{
     const pts=g.puntos+Motor.acreditar(g.combo,tramo);
     if(pts>this.state.record)this.setState({record:pts});
     // UN solo escalonado, para la leyenda y para la fanfarria. Sale de la curva de
-    // destreza MEDIDA (medianas de puntos por error de timing del bot: 200 ms=970,
-    // 120 ms=66.407, 60 ms=1.365.986, 0 ms=1.630.858), así que cada leyenda nombra la
-    // banda de precisión en la que cayó el vuelo. Los umbrales viejos
-    // (800/22.900/337.000/507.000) eran las medianas de cuando el drag frenaba el palo;
-    // la velocidad pasó a ser la historia de los toques, la curva se movió 3,2× y con la
-    // escala vieja TODO vuelo que encadenaba salía 'HISTÓRICO' otra vez — el mismo cartel
-    // que se contradice solo que ya nos pasó con la escala de tres tiros.
+    // destreza MEDIDA (medianas de puntos por error de timing del bot: 200 ms=14.099,
+    // 120 ms=601.524, 60 ms=1.197.423, 0 ms=1.585.663), así que cada leyenda nombra la
+    // banda de precisión en la que cayó el vuelo. Los umbrales se recalibran cada vez que
+    // la curva se mueve, y ésta se movió DOS veces: con el drag fuera de vx y otra vez con
+    // el presupuesto de toques, que le subió la mediana al jugador de 120 ms de 66.407 a
+    // 601.524 —9× más— porque errar dejó de ser mortal. Con la escala vieja, todo vuelo
+    // que encadenaba salía 'HISTÓRICO' y el cartel se contradecía solo.
     // La fanfarria se cuelga de ACÁ y no del green: festeja el puntaje, que es lo que el
     // jugador se ganó.
-    const NIVELES=[[1000,'QUÉ VERGÜENZA'],[66400,'ZAFA'],[1366000,'BUEN REVOLEO'],
-      [1631000,'TREMENDO'],[Infinity,'HISTÓRICO']];
+    const NIVELES=[[14000,'QUÉ VERGÜENZA'],[601500,'ZAFA'],[1197400,'BUEN REVOLEO'],
+      [1585700,'TREMENDO'],[Infinity,'HISTÓRICO']];
     const nivel=NIVELES.findIndex(n=>pts<n[0]),tag=NIVELES[nivel][1];
     if(nivel>=3)this.sfxHole();else if(nivel>=1)this.sfxGreen();else this.sfxLand();
     // El chip dorado dice cómo se terminó la cadena, que es lo único cierto del final de
@@ -658,7 +684,11 @@ class Component extends DCLogic{
     // así que TODO vuelo competente leía 'Cayó en el rough', y uno malo que se moría al
     // lado de un green podía sacar '¡LA EMBOCÓ EN EL HOYO!' pegado a 'QUÉ VERGÜENZA'.
     // Tampoco se usa la palabra "anillo": ésa ya nombra el anillo de timing.
-    const cierre=g.club.crashed?'Lo frenó un obstáculo':'Se le cortó la cadena';
+    // Tres finales, y ahora son tres de verdad: quedarse sin toques es un desenlace
+    // propio y el jugador tiene que poder leerlo, porque es el único que se maneja
+    // administrando el presupuesto en vez de afinando el timing.
+    const cierre=g.club.crashed?'Lo frenó un obstáculo'
+      :g.toques<=0?'Se quedó sin toques':'Se le cortó la cadena';
     const parts=[m+' m'];
     if(g.puntos)parts.push('+'+g.puntos+' de rebotes');
     if(g.combo>1)parts.push('combo ×'+g.combo);
@@ -666,6 +696,7 @@ class Component extends DCLogic{
     this.op(this.rMetros,'0');
     this.op(this.rBest,'0');
     this.op(this.rTricks,'0');
+    this.op(this.rToques,'0');
     this.setState({best:m,points:pts,showRes:true,
       res:{m:pts+' PTS',tag:tag,note:note,pts:cierre,kicker:'Se terminó el revoleo',label:'Ver ranking'}});
   }
@@ -692,7 +723,10 @@ class Component extends DCLogic{
     this.begin()}
   onUp=()=>{this.fire()}
 
-  hit(o,c){const bx=o.x,by=GY-o.h;return c.x>bx-4&&c.x<bx+o.w+4&&c.y>by&&c.y<GY+3}
+  // La caja la define el motor (Motor.choca), y no se calcula acá con GY - o.h: esa
+  // cuenta da por sentado que todo está apoyado en el pasto, así que un dron habría sido
+  // pared desde su cima hasta el suelo y no se podría pasar por abajo.
+  hit(o,c){return Motor.choca(o,c)}
 
   step(){
     const g=this.g;if(!g)return;
@@ -761,7 +795,7 @@ class Component extends DCLogic{
         // dejaba inalcanzable la mitad tardía de la ventana de perfecto, que es
         // simétrica en resolverRebote. El resto de los obstáculos sigue chocando.
         if(o===g.objetivo)continue;
-        if(!o.near&&!this.hit(o,c)&&c.x>o.x-8&&c.x<o.x+o.w+8&&c.y<GY-o.h&&c.y>GY-o.h-20){o.near=true;this.trick('AL RAS')}
+        if(!o.near&&Motor.alRas(o,c)){o.near=true;this.trick('AL RAS')}
         // NO es código muerto, aunque la Task 5 lo midiera en 0 de 80 vuelos cortos:
         // medido en vuelos largos corre 1 o 2 veces por vuelo. Lo que castiga es real y
         // suficiente —el choque le come el 78% de vx y casi siempre deja la cadena sin
@@ -787,6 +821,24 @@ class Component extends DCLogic{
           this.buscarObjetivo();
         }
       }
+      // El palo pasó el objetivo sin pegarle: esa chance se terminó y hay que ofrecerle
+      // la siguiente. Sin esto el objetivo quedaba clavado —buscarObjetivo sólo corría
+      // después de una pegada— y errar UN toque dejaba al jugador cayendo sin nada a lo
+      // que tocarle: o sea que un solo error terminaba el vuelo, que es exactamente lo
+      // que el presupuesto de toques viene a evitar.
+      // Se marca INERTE y no `hit`: no fue un choque, fue una oportunidad perdida, y el
+      // palo todavía puede estar bajando dentro de su caja. Si volviera a ser pared se
+      // estrellaría contra el mismo objetivo que acaba de errar, y ese choque sí termina
+      // el vuelo — el castigo de errar volvería a ser la muerte.
+      // La chance se termina cuando pasó la mitad TARDÍA de la ventana, y se mide en la
+      // ventana y no en la x del sprite: el cruce de cima puede caer sobre el borde
+      // derecho de la caja, y ahí "el palo pasó la caja" ocurre en el MISMO paso de
+      // física que la llegada. Medido con la condición escrita en x: el objetivo se
+      // anulaba antes de que el jugador llegara a tocar y 4 de 5 vuelos impecables
+      // perdían la cadena exactamente así, con el palo en la cima y vy todavía positiva.
+      if(g.objetivo&&g.pasoObjetivo!=null&&
+         (g.pasosVuelo-g.pasoObjetivo)*(Motor.F.STEP/Motor.F.VUELO)>Motor.F.VENTANA_BUENO){
+        g.objetivo.inerte=true;this.buscarObjetivo();}
       for(const p of (g.pel||[])){
         if(p.near)continue;
         const pScreen=p.x-g.cam*0.62,cScreen=c.x-g.cam;
@@ -830,6 +882,14 @@ class Component extends DCLogic{
       g.hudT=(g.hudT||0)+1;
       if(g.club&&!g.club.grounded&&g.hudT%6===0)
         this.txt(this.rHint,'Combo ×'+g.combo+' · tocá en el anillo');
+      // El contador de toques es EL número de supervivencia del vuelo, así que se pinta
+      // sólo cuando cambia (no cada frame: cada escritura invalida estilo y layout) y en
+      // rojo cuando llega a cero, que es el único estado del que el jugador no puede
+      // salir tocando. El color se escribe con el texto porque cambia con él.
+      if(g.toques!==g.toquesPint){g.toquesPint=g.toques;
+        this.txt(this.rToques,g.toques+(g.toques===1?' toque':' toques'));
+        const el=this.rToques.current;
+        if(el)el.style.color=g.toques?'#E8C34A':'#BC4B3C';}
       // El corrimiento sale de Motor.camObjetivo y el factor del lerp de Motor.F.SEG:
       // son los mismos de los que Motor.adelante saca cuánto arco se ve por delante del
       // palo, y de ahí el aviso mínimo. Escritos acá a mano, la cámara y el presupuesto
@@ -953,6 +1013,25 @@ class Component extends DCLogic{
         this.px(ox+3,GY-6,6,6,'#0C2B1C');this.px(ox+20,GY-6,6,6,'#0C2B1C')}
       else if(o.t==='caddie'){this.px(ox+3,GY-30,10,10,'#E8B48C');this.px(ox+2,GY-20,13,13,o.hit?'#BC4B3C':'#E7DFC2');
         this.px(ox+3,GY-7,4,7,'#14402A');this.px(ox+9,GY-7,4,7,'#14402A');this.px(ox+14,GY-28,4,20,'#C9A22E')}
+      // Los de aire se dibujan colgados de o.cima y no de GY: es la misma razón por la
+      // que la caja salió de acá y se fue a Motor.choca. Cualquier offset contra GY
+      // volvería a suponer que están apoyados en el pasto.
+      else if(o.t==='dron'){const cy=o.cima;
+        this.px(ox+3,cy+1,3,2,'#8FA0B0');this.px(ox+14,cy+1,3,2,'#8FA0B0');
+        this.px(ox,cy,8,2,'#D9E8DC');this.px(ox+12,cy,8,2,'#D9E8DC');
+        this.px(ox+5,cy+4,10,6,o.hit?'#BC4B3C':'#3A4450');
+        this.px(ox+8,cy+10,3,2,Math.sin(this.now()/180)>0?'#E8C34A':'#7A2E24')}
+      else if(o.t==='cable'){const cy=o.cima;
+        this.px(ox+1,cy,2,6,'#5A4A38');this.px(ox+31,cy,2,6,'#5A4A38');
+        this.px(ox,cy+2,34,2,o.hit?'#BC4B3C':'#22282F')}
+      // El pasto: un mechón en el fairway. Se DIBUJA aunque su cima sea el suelo, y no
+      // es decoración — es la plataforma de último recurso, el anillo se cierra sobre
+      // ella, y si no se ve el jugador no entiende a qué le está por pegar. Sin esta rama
+      // caía en el `else` de abajo y se dibujaba como una persona del SDGA.
+      else if(o.t==='pasto'){const cy=o.cima;
+        this.px(ox+1,cy-3,2,3,'#8FC7A3');this.px(ox+5,cy-5,2,5,o.hit?'#E8C34A':'#A8D9B8');
+        this.px(ox+9,cy-3,2,3,'#8FC7A3');this.px(ox+13,cy-4,2,4,'#A8D9B8');
+        this.px(ox,cy-1,16,1,o.hit?'#E8C34A':'#6FAE87')}
       else{this.px(ox+4,GY-30,11,10,'#E8B48C');this.px(ox+2,GY-20,15,13,o.hit?'#BC4B3C':'#6FAE87');
         this.px(ox+4,GY-7,4,7,'#14402A');this.px(ox+10,GY-7,4,7,'#14402A');
         if(this._font!=='12px serif'){this._font='12px serif';ctx.font='12px serif';ctx.textAlign='center'}
@@ -1071,7 +1150,7 @@ class Component extends DCLogic{
       elegir:this.elegir,crear:this.crear,setNombre:this.setNombre,
       nuevoJugador:this.nuevoJugador,cambiarJugador:this.cambiarJugador,
       isTitle:s.screen==='title',isPlay:s.screen==='play',isRank:isRank,
-      cv:this.cv,rMetros:this.rMetros,rBest:this.rBest,
+      cv:this.cv,rMetros:this.rMetros,rBest:this.rBest,rToques:this.rToques,
       rGrito:this.rGrito,rFloat:this.rFloat,rHint:this.rHint,rTricks:this.rTricks,
       onDown:this.onDown,onUp:this.onUp,
       start:this.start,next:this.next,again:this.again,toTitle:this.toTitle,
@@ -1088,7 +1167,7 @@ const game = new Component();
 game.props = { censura: 'Sin filtro', sonido: true };
 
 // los refs del motor apuntan directo a los nodos del shell
-const REFS = { cv:'cv', rMetros:'rMetros', rBest:'rBest',
+const REFS = { cv:'cv', rMetros:'rMetros', rBest:'rBest', rToques:'rToques',
   rGrito:'rGrito', rFloat:'rFloat', rHint:'rHint', rTricks:'rTricks' };
 for (const k in REFS) game[k].current = $(REFS[k]);
 
